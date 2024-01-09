@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <title>漂亮的小风车</title>
+</head>
+
+<body>
+    <div class="windmill">
+        <div class="top"></div>
+        <div class="blade blade1"></div>
+        <div class="blade blade2"></div>
+        <div class="blade blade3"></div>
+        <div class="blade blade4"></div>
+    </div>
+</body>
+
+</html>
+<style>
+    body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        background-color: #87CEEB;
+    }
+    
+    .windmill {
+        width: 100px;
+        height: 100px;
+        position: relative;
+        animation: rotate 4s linear infinite;
+    }
+    
+    .top {
+        width: 20px;
+        height: 20px;
+        background-color: #FFD700;
+        border-radius: 50%;
+        position: absolute;
+        top: 40px;
+        left: 40px;
+        z-index: 1;
+    }
+    
+    .blade {
+        width: 4px;
+        height: 40px;
+        background-color: #FF4500;
+        position: absolute;
+        top: 10px;
+        left: 48px;
+        transform-origin: 50% 100%;
+    }
+    
+    .blade1 {
+        transform: rotate(45deg);
+    }
+    
+    .blade2 {
+        transform: rotate(135deg);
+    }
+    
+    .blade3 {
+        transform: rotate(225deg);
+    }
+    
+    .blade4 {
+        transform: rotate(315deg);
+    }
+    
+    @keyframes rotate {
+        0% {
+            transform: rotate(0deg);
+        }
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+</style>
