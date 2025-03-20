@@ -1,54 +1,78 @@
 <template>
   <div id="app">
-    <StarryBackground/> 
-    <Header />
-    <div id="main">
-      <transition name="scale" mode="out-in">
-        <router-view></router-view>
-      </transition>
-    </div>
+    <TechBackground/> 
+    <template v-if="isAuthenticated">
+      <Header />
+      <div id="main">
+        <transition name="scale" mode="out-in">
+          <router-view></router-view>
+        </transition>
+      </div>
+    </template>
+    <template v-else>
+      <router-view></router-view>
+    </template>
   </div>
 </template>
 
 <script>
-import StarryBackground from "@/components/StarryBackground.vue";
-import Header from "@/components/Header.vue";
+import Header from './components/Header.vue'
+import TechBackground from './components/TechBackground.vue'
+
 export default {
-  components:{
-    StarryBackground,
-    Header
+  name: 'App',
+  components: {
+    Header,
+    TechBackground
+  },
+  computed: {
+    isAuthenticated() {
+      return localStorage.getItem('username') !== null
+    }
   }
 }
 </script>
 
-<style lang="less" scoped>
-#main{
-  padding:15px;
-  box-sizing: border-box;
-}
-.scale-enter-active {
-  transition: transform 0.5s ease-in-out;
-  transform-origin: center;
-  transform: scale(0); /* 初始状态，可以根据需要调整 */
-}
-
-.scale-enter-to {
-  transform: scale(1); /* 最终状态，可以根据需要调整 */
-}
-
-/* 元素离开时的过渡样式 */
-.scale-leave-active {
-  transition: transform 0.5s ease-in-out;
-  transform-origin: center;
-  transform: scale(1); /* 初始状态，可以根据需要调整 */
-}
-
-.scale-leave-to {
-  transform: scale(0); /* 最终状态，可以根据需要调整 */
-}
-*{
-  position: relative;
-  padding: 0;
+<style>
+body, html {
   margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow: auto;
+}
+
+#app {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+}
+
+#main {
+  position: relative;
+  z-index: 10;
+  padding-top: 60px; /* 为顶部导航栏留出空间 */
+  padding-bottom: 20px; /* 底部留出空间 */
+  min-height: calc(100vh - 80px); /* 确保内容区域高度合适 */
+  overflow-y: auto; /* 允许内容区域滚动 */
+}
+
+.login-page-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  width: 100%;
+  position: relative;
+  z-index: 10;
+}
+
+.scale-enter-active, .scale-leave-active {
+  transition: all 0.3s ease;
+}
+
+.scale-enter, .scale-leave-to {
+  opacity: 0;
+  transform: scale(0.98);
 }
 </style>

@@ -1,0 +1,10 @@
+.ssh/
+*.key
+*.crt
+*.csr
+*.pem
+*.p12
+*.pfx
+*.der
+*.cer
+node_modules/ 
