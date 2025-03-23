@@ -53,7 +53,17 @@
                 <i :class="message.role === 'user' ? 'el-icon-user' : 'el-icon-cpu'"></i>
               </div>
               <div class="message-content">
-                <div class="message-text">{{ message.content }}</div>
+                <div class="message-text" v-if="message.role === 'user'">{{ message.content }}</div>
+                <div 
+                  class="message-text markdown-content" 
+                  v-else-if="!message.isLoading" 
+                  v-html="parseMarkdown(message.content)">
+                </div>
+                <div class="message-text loading-message" v-else>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                </div>
                 <div class="message-time">{{ message.timestamp }}</div>
               </div>
             </div>
@@ -124,6 +134,9 @@
 </template>
 
 <script>
+import apiClient from '@/api/ApiClient';
+import MarkdownIt from 'markdown-it';
+
 export default {
   name: 'LLMService',
   data() {
@@ -132,7 +145,8 @@ export default {
       activeChat: 0,
       inputMessage: '',
       isLoading: false,
-      isShiftPressed: false
+      isShiftPressed: false,
+      md: new MarkdownIt()
     }
   },
   computed: {
@@ -184,64 +198,127 @@ export default {
       e.preventDefault();
       this.sendMessage();
     },
-    sendMessage() {
-      if (!this.inputMessage.trim()) return;
-      
+    
+    // 获取格式化的时间
+    getFormattedTime() {
       const now = new Date();
-      const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-      
-      // 添加用户消息
-      this.chatHistory[this.activeChat].messages.push({
-        role: 'user',
-        content: this.inputMessage,
-        timestamp
-      });
-      
-      const userMessage = this.inputMessage;
-      this.inputMessage = '';
-      
-      // 滚动到底部
+      return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    },
+    
+    // 添加消息到当前会话
+    addMessage(message) {
+      this.chatHistory[this.activeChat].messages.push(message);
+      this.scrollToBottom();
+    },
+    
+    // 滚动到底部
+    scrollToBottom() {
       this.$nextTick(() => {
         if (this.$refs.messageList) {
           this.$refs.messageList.scrollTop = this.$refs.messageList.scrollHeight;
         }
       });
-      
-      // 模拟AI响应
-      this.isLoading = true;
-      setTimeout(() => {
-        const aiResponse = this.generateResponse(userMessage);
-        const responseTime = new Date();
-        const responseTimestamp = `${responseTime.getHours().toString().padStart(2, '0')}:${responseTime.getMinutes().toString().padStart(2, '0')}`;
-        
-        this.chatHistory[this.activeChat].messages.push({
-          role: 'assistant',
-          content: aiResponse,
-          timestamp: responseTimestamp
-        });
-        
-        this.isLoading = false;
-        
-        // 滚动到底部
-        this.$nextTick(() => {
-          if (this.$refs.messageList) {
-            this.$refs.messageList.scrollTop = this.$refs.messageList.scrollHeight;
-          }
-        });
-      }, 1000);
     },
-    generateResponse(message) {
-      // 简单的响应生成逻辑
-      if (message.includes('糖尿病') || message.includes('视网膜病变')) {
-        return '糖尿病视网膜病变是糖尿病的常见并发症，特征包括微血管瘤、出血点、硬性渗出、棉絮斑、新生血管等。早期可能没有明显症状，但随着病情进展可能导致视力下降甚至失明。定期眼底检查对早期发现和治疗至关重要。';
-      } else if (message.includes('青光眼') || message.includes('白内障')) {
-        return '青光眼和白内障是两种不同的眼部疾病。青光眼主要是由于眼内压升高导致视神经损伤，症状包括视野缺损、眼痛等；白内障则是晶状体混浊导致视力模糊、视物变形等。诊断需要专业眼科检查，包括眼压测量、视野检查、裂隙灯检查等。';
-      } else if (message.includes('眼底') || message.includes('图像')) {
-        return '眼底图像分析是眼科诊断的重要手段。异常区域可能包括出血点、渗出物、微血管瘤等。我们的AI系统可以帮助识别这些异常区域，提高诊断准确性。建议上传眼底图像以获取更精确的分析结果。';
-      } else {
-        return '作为眼科AI助手，我可以回答关于眼疾诊断、治疗和预防的问题。您可以询问特定眼病的症状、诊断方法，或者上传眼底图像进行分析。';
+
+    // 解析markdown内容
+    parseMarkdown(content) {
+      return this.md.render(content);
+    },
+
+    async sendMessage() {
+      if (!this.inputMessage.trim()) return;
+
+      // 添加用户消息
+      const userMessage = {
+        role: "user",
+        content: this.inputMessage,
+        timestamp: this.getFormattedTime()
+      };
+      this.addMessage(userMessage);
+      
+      const userContent = this.inputMessage;
+      this.inputMessage = "";
+
+      try {
+        this.isLoading = true;
+        
+        // 添加加载状态消息
+        const loadingId = this.addLoadingMessage();
+        
+        // 调用后端API
+        const response = await apiClient.post('/chat/completions', {
+          model: "deepseek-chat",
+          messages: [{
+            role: "user",
+            content: userContent
+          }]
+        });
+
+        // 移除加载消息
+        this.removeLoadingMessage(loadingId);
+
+        // 添加AI响应
+        const aiMessage = {
+          role: "assistant",
+          content: response.data.choices[0].message.content,
+          timestamp: this.getFormattedTime()
+        };
+        this.addMessage(aiMessage);
+
+      } catch (error) {
+        // 移除所有加载消息
+        this.removeAllLoadingMessages();
+        this.handleError(error);
+      } finally {
+        this.isLoading = false;
+        this.scrollToBottom();
       }
     },
+    
+    // 添加加载状态消息
+    addLoadingMessage() {
+      const loadingId = Date.now(); // 使用时间戳作为唯一ID
+      this.chatHistory[this.activeChat].messages.push({
+        id: loadingId,
+        role: "assistant",
+        content: "思考中...",
+        timestamp: this.getFormattedTime(),
+        isLoading: true
+      });
+      this.scrollToBottom();
+      return loadingId;
+    },
+    
+    // 移除加载状态消息
+    removeLoadingMessage(id) {
+      const messages = this.chatHistory[this.activeChat].messages;
+      const index = messages.findIndex(msg => msg.id === id && msg.isLoading);
+      if (index !== -1) {
+        messages.splice(index, 1);
+      }
+    },
+    
+    // 移除所有加载状态消息
+    removeAllLoadingMessages() {
+      const messages = this.chatHistory[this.activeChat].messages;
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].isLoading) {
+          messages.splice(i, 1);
+        }
+      }
+    },
+
+    handleError(error) {
+      console.error('API Error:', error);
+      const errorMsg = error.response?.data?.error || '服务暂时不可用，请稍后再试';
+
+      this.addMessage({
+        role: "system",
+        content: `错误：${errorMsg}`,
+        timestamp: this.getFormattedTime()
+      });
+    },
+    
     usePrompt(prompt) {
       this.inputMessage = prompt;
     },
@@ -447,9 +524,9 @@ export default {
   animation: fadeIn 0.3s ease;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+.user-message {
+  flex-direction: row-reverse;
+  justify-content: flex-start;
 }
 
 .message-avatar {
@@ -464,6 +541,8 @@ export default {
 }
 
 .user-message .message-avatar {
+  margin-right: 0;
+  margin-left: 12px;
   background: rgba(57, 175, 253, 0.2);
   border: 1px solid rgba(57, 175, 253, 0.4);
 }
@@ -491,6 +570,10 @@ export default {
   flex-direction: column;
 }
 
+.user-message .message-content {
+  align-items: flex-end;
+}
+
 .message-text {
   padding: 12px 16px;
   border-radius: 8px;
@@ -503,12 +586,49 @@ export default {
   background: rgba(57, 175, 253, 0.1);
   border: 1px solid rgba(57, 175, 253, 0.2);
   color: #fff;
+  border-top-right-radius: 0;
 }
 
 .ai-message .message-text {
   background: rgba(141, 209, 254, 0.1);
   border: 1px solid rgba(141, 209, 254, 0.2);
   color: #fff;
+  border-top-left-radius: 0;
+}
+
+.markdown-content :deep(pre) {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 10px;
+  border-radius: 5px;
+  overflow-x: auto;
+}
+
+.markdown-content :deep(code) {
+  font-family: Monaco, Consolas, 'Courier New', monospace;
+}
+
+.markdown-content :deep(p) {
+  margin: 8px 0;
+}
+
+.markdown-content :deep(ul), .markdown-content :deep(ol) {
+  padding-left: 20px;
+}
+
+.markdown-content :deep(a) {
+  color: #39AFFD;
+  text-decoration: none;
+}
+
+.markdown-content :deep(a:hover) {
+  text-decoration: underline;
+}
+
+.markdown-content :deep(blockquote) {
+  border-left: 3px solid rgba(57, 175, 253, 0.5);
+  padding-left: 10px;
+  margin-left: 0;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .message-time {
@@ -705,4 +825,293 @@ export default {
   transform: translateY(-2px);
   box-shadow: 0 5px 15px rgba(57, 175, 253, 0.2);
 }
+
+/* 自定义滚动条样式 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(13, 28, 64, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(57, 175, 253, 0.4);
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(57, 175, 253, 0.6);
+}
+
+/* 加载中消息动画 */
+.loading-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  min-width: 60px;
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: rgba(141, 209, 254, 0.8);
+  margin: 0 3px;
+  animation: dot-pulse 1.5s infinite ease-in-out;
+}
+
+.dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes dot-pulse {
+  0%, 60%, 100% { 
+    transform: scale(0.8);
+    opacity: 0.6;
+  }
+  30% { 
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+.conversation-items, .message-list {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(57, 175, 253, 0.4) rgba(13, 28, 64, 0.3);
+}
+
+.ai-message .loading-message {
+  background: rgba(141, 209, 254, 0.1);
+  border: 1px solid rgba(141, 209, 254, 0.2);
+  color: #fff;
+  border-top-left-radius: 0;
+}
+
+.chat-input-wrapper {
+  background: rgba(16, 32, 67, 0.6);
+  border: 1px solid rgba(57, 175, 253, 0.3);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.chat-input {
+  width: 100%;
+  min-height: 60px;
+  max-height: 150px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  resize: none;
+  outline: none;
+  padding: 5px;
+}
+
+.input-actions {
+  display: flex;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.upload-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(57, 175, 253, 0.1);
+  border: 1px solid rgba(57, 175, 253, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.upload-btn:hover {
+  background: rgba(57, 175, 253, 0.2);
+}
+
+.upload-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.upload-btn i {
+  color: #39AFFD;
+  font-size: 18px;
+}
+
+.send-btn {
+  background: rgba(57, 175, 253, 0.2);
+  border: 1px solid rgba(57, 175, 253, 0.4);
+  color: #8DD1FE;
+}
+
+.send-btn:hover {
+  background: rgba(57, 175, 253, 0.3);
+  border-color: rgba(57, 175, 253, 0.6);
+}
+
+/* Image preview styles */
+.image-preview-container {
+  margin-bottom: 10px;
+  padding: 0 5px;
+}
+
+.image-preview {
+  position: relative;
+  display: inline-block;
+  max-width: 200px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(57, 175, 253, 0.3);
+}
+
+.image-preview img {
+  width: 100%;
+  max-height: 150px;
+  object-fit: contain;
+  display: block;
+}
+
+.image-actions {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.image-actions:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.image-actions i {
+  color: #fff;
+  font-size: 14px;
+}
+
+/* Message image styles */
+.message-image {
+  margin-top: 8px;
+  max-width: 200px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(57, 175, 253, 0.3);
+}
+
+.message-image img {
+  width: 100%;
+  max-height: 150px;
+  object-fit: contain;
+  display: block;
+}
+
+/* Loading animation */
+.loading-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  background: #8DD1FE;
+  border-radius: 50%;
+  margin: 0 3px;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.dot:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.dot:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Empty chat state */
+.empty-chat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: rgba(141, 209, 254, 0.6);
+  text-align: center;
+  padding: 20px;
+}
+
+.empty-icon {
+  font-size: 48px;
+  color: rgba(57, 175, 253, 0.3);
+  margin-bottom: 20px;
+}
+
+.empty-chat h3 {
+  color: #8DD1FE;
+  margin-bottom: 10px;
+}
+
+.suggestion-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 20px;
+  gap: 10px;
+}
+
+.chip {
+  background: rgba(57, 175, 253, 0.1);
+  border: 1px solid rgba(57, 175, 253, 0.3);
+  border-radius: 16px;
+  padding: 8px 16px;
+  font-size: 13px;
+  color: #8DD1FE;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chip:hover {
+  background: rgba(57, 175, 253, 0.2);
+  border-color: rgba(57, 175, 253, 0.5);
+}
+
 </style>

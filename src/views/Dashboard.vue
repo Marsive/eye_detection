@@ -29,7 +29,7 @@
               <li>批量处理多张图像</li>
             </ul>
           </div>
-          <el-button type="primary" @click="$router.push('/data-enhancement')" class="feature-button">
+          <el-button type="primary" @click="$router.push('/DataAEnhancement')" class="feature-button">
             立即使用
           </el-button>
         </div>

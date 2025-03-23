@@ -1,38 +1,46 @@
 <template>
   <div class="data-enhancement-container">
     <div class="module-title">图像数据增强</div>
-    
+
     <div class="content-wrapper">
       <div class="left-panel">
         <div class="section-title">数据增强选项</div>
         <div class="enhancement-options">
-          <el-button 
-            v-for="option in augmentations" 
+          <el-button
+            v-for="option in augmentations"
             :key="option.value"
-            :class="{'active-button': selectedAugmentations.includes(option.value)}"
-            @click="toggleAugmentation(option.value)">
+            :class="{
+              'active-button': selectedAugmentations.includes(option.value),
+            }"
+            @click="toggleAugmentation(option.value)"
+          >
             {{ option.label }}
           </el-button>
         </div>
-        
+
         <div class="section-title mt-20">上传眼底图像</div>
         <div class="upload-area">
           <el-upload
             class="image-uploader"
-            action="#"
+            :action="uploadUrl"
             :show-file-list="false"
-            :on-change="handleImageUpload"
-            :auto-upload="false"
-            :limit="1">
+            :on-success="handleUploadSuccess"
+            :on-error="handleUploadError"
+            :before-upload="beforeUpload"
+            :headers="uploadHeaders"
+            name="file"
+            :with-credentials="false"
+            :limit="1"
+          >
             <div class="upload-placeholder" v-if="!originalImage">
               <i class="el-icon-upload"></i>
               <div class="upload-text">点击上传图像</div>
             </div>
-            <img v-else :src="originalImage" class="preview-image">
+            <img v-else :src="originalImage" class="preview-image" />
           </el-upload>
         </div>
       </div>
-      
+
       <div class="right-panel">
         <div class="section-title">原始图像</div>
         <div class="image-display">
@@ -40,30 +48,46 @@
             <i class="el-icon-picture-outline"></i>
             <p>请先上传图像</p>
           </div>
-          <img v-else :src="originalImage" class="display-image">
+          <img v-else :src="originalImage" class="display-image" />
         </div>
-        
-        <el-button 
-          type="primary" 
-          class="process-button" 
-          @click="applyAugmentation" 
-          :disabled="!originalImage || selectedAugmentations.length === 0"
-          :loading="processing">
+
+        <el-button
+          type="primary"
+          class="process-button"
+          @click="applyAugmentation"
+          :disabled="
+            !originalImage || selectedAugmentations.length === 0 || !imageId
+          "
+          :loading="processing"
+        >
           <i class="el-icon-refresh-right"></i> 执行数据增强
         </el-button>
-        
+
         <div class="section-title mt-20">增强结果</div>
         <div class="image-display">
-          <div v-if="!augmentedImage" class="empty-state">
+          <div
+            v-if="!augmentedImages || augmentedImages.length === 0"
+            class="empty-state"
+          >
             <i class="el-icon-data-analysis"></i>
             <p>增强结果将显示在这里</p>
           </div>
-          <img v-else :src="augmentedImage" class="display-image">
-          <el-button 
-            v-if="augmentedImage" 
-            type="success" 
+          <div v-else class="enhanced-images-container">
+            <div
+              v-for="(image, index) in augmentedImages"
+              :key="index"
+              class="enhanced-image-item"
+            >
+              <img :src="image.url" class="display-image" />
+              <div class="image-label">{{ image.label }}</div>
+            </div>
+          </div>
+          <el-button
+            v-if="augmentedImages && augmentedImages.length > 0"
+            type="success"
             class="download-button"
-            @click="downloadAugmentedImages">
+            @click="downloadAugmentedImages"
+          >
             <i class="el-icon-download"></i> 下载增强图像
           </el-button>
         </div>
@@ -73,56 +97,155 @@
 </template>
 
 <script>
+import axios from "axios";
+
 export default {
   data() {
     return {
       processing: false,
       selectedAugmentations: [],
-      originalImage: '',
-      augmentedImage: '',
+      originalImage: "",
+      imageId: null,
+      augmentedImages: [],
       augmentations: [
-        { label: '随机旋转', value: 'rotation' },
-        { label: '水平翻转', value: 'flip' },
-        { label: '亮度对比度调整', value: 'brightness_contrast' }
-      ]
+        { label: "随机旋转", value: "rotate" },
+        { label: "水平翻转", value: "flip" },
+        { label: "亮度对比度调整", value: "contrast" },
+      ],
+      uploadUrl: "http://localhost:8081/api/image/upload",
+      apiBaseUrl: "http://localhost:8081/api",
     };
+  },
+  computed: {
+    uploadHeaders() {
+      return {
+        "Content-Type": "multipart/form-data",
+      };
+    },
   },
   methods: {
     toggleAugmentation(value) {
       if (this.selectedAugmentations.includes(value)) {
-        this.selectedAugmentations = this.selectedAugmentations.filter(item => item !== value);
+        this.selectedAugmentations = this.selectedAugmentations.filter(
+          (item) => item !== value
+        );
       } else {
         this.selectedAugmentations.push(value);
       }
     },
-    handleImageUpload(file) {
-      this.originalImage = URL.createObjectURL(file.raw);
-      this.augmentedImage = ''; // 清空之前的增强结果
+    beforeUpload(file) {
+      const isImage = file.type.startsWith("image/");
+      const isLt5M = file.size / 1024 / 1024 < 5;
+
+      if (!isImage) {
+        this.$message.error("只能上传图片文件!");
+        return false;
+      }
+      if (!isLt5M) {
+        this.$message.error("图片大小不能超过 5MB!");
+        return false;
+      }
+      return true;
+    },
+    handleUploadSuccess(response) {
+      if (response.success) {
+        this.imageId = response.data.imageId;
+        this.originalImage = `${this.apiBaseUrl}/image/${this.imageId}`;
+        this.augmentedImages = []; // 清空之前的增强结果
+        this.$message.success("图像上传成功");
+      } else {
+        this.$message.error(response.message || "上传失败");
+      }
+    },
+    handleUploadError(error) {
+      console.error("上传错误:", error);
+      this.$message.error("图像上传失败，请重试");
     },
     async applyAugmentation() {
-      if (!this.originalImage || this.selectedAugmentations.length === 0) return;
-      
+      if (!this.imageId || this.selectedAugmentations.length === 0) return;
+
       try {
         this.processing = true;
-        // 模拟处理延迟
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        // 实际应替换为API调用
-        this.augmentedImage = this.originalImage;
-        this.$message.success('增强处理完成');
+
+        // 构建请求参数
+        const params = new URLSearchParams();
+        params.append("imageId", this.imageId);
+        params.append("rotate", this.selectedAugmentations.includes("rotate"));
+        params.append("flip", this.selectedAugmentations.includes("flip"));
+        params.append(
+          "contrast",
+          this.selectedAugmentations.includes("contrast")
+        );
+
+        // 调用后端API
+        const response = await axios.post(
+          `${this.apiBaseUrl}/image/enhance`,
+          params
+        );
+
+        if (response.data.success) {
+          const enhancedImagesData = response.data.data.enhancedImages;
+          this.augmentedImages = [];
+
+          // 处理返回的增强图像
+          if (enhancedImagesData.rotated) {
+            this.augmentedImages.push({
+              url: enhancedImagesData.rotated,
+              label: "随机旋转",
+              downloadUrl: enhancedImagesData.rotated,
+            });
+          }
+
+          if (enhancedImagesData.flipped) {
+            this.augmentedImages.push({
+              url: enhancedImagesData.flipped,
+              label: "水平翻转",
+              downloadUrl: enhancedImagesData.flipped,
+            });
+          }
+
+          if (enhancedImagesData.contrasted) {
+            this.augmentedImages.push({
+              url: enhancedImagesData.contrasted,
+              label: "亮度对比度调整",
+              downloadUrl: enhancedImagesData.contrasted,
+            });
+          }
+
+          this.$message.success("增强处理完成");
+        } else {
+          this.$message.error(response.data.message || "处理失败");
+        }
       } catch (error) {
-        this.$message.error('处理失败');
+        console.error("增强处理错误:", error);
+        this.$message.error("增强处理失败，请重试");
       } finally {
         this.processing = false;
       }
     },
-    downloadAugmentedImages() {
-      if (!this.augmentedImage) return;
-      const a = document.createElement('a');
-      a.href = this.augmentedImage;
-      a.download = 'enhanced_image.png';
-      a.click();
-    }
-  }
+    async downloadAugmentedImages() {
+      if (!this.augmentedImages || this.augmentedImages.length === 0) return;
+
+      try {
+        // 创建一个zip文件包含所有增强图像
+        // 这里简化为下载第一张图片
+        const image = this.augmentedImages[0];
+        const response = await fetch(image.url);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `enhanced_${image.label}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } catch (error) {
+        console.error("下载错误:", error);
+        this.$message.error("下载失败，请重试");
+      }
+    },
+  },
 };
 </script>
 
@@ -134,7 +257,7 @@ export default {
 
 .module-title {
   font-size: 24px;
-  color: #39AFFD;
+  color: #39affd;
   text-align: center;
   margin-bottom: 30px;
   text-shadow: 0 0 10px rgba(57, 175, 253, 0.5);
@@ -145,7 +268,8 @@ export default {
   gap: 20px;
 }
 
-.left-panel, .right-panel {
+.left-panel,
+.right-panel {
   flex: 1;
   background: rgba(13, 28, 64, 0.7);
   border-radius: 12px;
@@ -156,7 +280,7 @@ export default {
 
 .section-title {
   font-size: 18px;
-  color: #39AFFD;
+  color: #39affd;
   margin-bottom: 15px;
 }
 
@@ -188,12 +312,12 @@ export default {
 
 .upload-placeholder i {
   font-size: 48px;
-  color: #39AFFD;
+  color: #39affd;
   margin-bottom: 10px;
 }
 
 .upload-text {
-  color: #8DD1FE;
+  color: #8dd1fe;
 }
 
 .preview-image {
@@ -211,6 +335,7 @@ export default {
   align-items: center;
   justify-content: center;
   position: relative;
+  overflow: auto;
 }
 
 .empty-state {
@@ -218,7 +343,7 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #8DD1FE;
+  color: #8dd1fe;
 }
 
 .empty-state i {
@@ -230,6 +355,26 @@ export default {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+}
+
+.enhanced-images-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.enhanced-image-item {
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.image-label {
+  margin-top: 5px;
+  color: #8dd1fe;
+  font-size: 14px;
 }
 
 .process-button {
@@ -254,13 +399,23 @@ export default {
 
 /* 2. 激活状态按钮 */
 ::v-deep .el-button.active-button {
-  background: linear-gradient(45deg, #6ad4ff, #42a5ff) !important; /* 亮蓝渐变 */
+  background: linear-gradient(
+    45deg,
+    #6ad4ff,
+    #42a5ff
+  ) !important; /* 亮蓝渐变 */
 }
 
 /* 3. 上传区域背景 */
+.upload-area ::v-deep .el-upload {
+  display: block;
+  width: 100%;
+}
+
 .upload-area ::v-deep .el-upload-dragger {
   background: rgba(16, 62, 127, 0.8) !important; /* 更亮的深蓝 */
   border-color: #42a5ff !important;
+  width: 100%;
 }
 
 @media (max-width: 768px) {
