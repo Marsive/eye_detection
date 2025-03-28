@@ -6,7 +6,7 @@
       <h1>眼底图像 <span class="highlight">分类识别</span></h1>
       <div class="tech-line right"></div>
     </div>
-    
+
     <!-- 主体内容区域 -->
     <div class="tech-content">
       <!-- 左侧上传区域 -->
@@ -16,37 +16,41 @@
           <span>左眼影像</span>
         </div>
         <div class="card-body">
-          <div 
-            class="upload-area" 
-            @click="triggerUpload('left')" 
-            @drop.prevent="handleDrop($event, 'left')" 
+          <div
+            class="upload-area"
+            @click="triggerUpload('left')"
+            @drop.prevent="handleDrop($event, 'left')"
             @dragover.prevent
+            v-if="!leftImage"
           >
-            <input 
-              type="file" 
-              ref="leftFileInput" 
-              style="display: none" 
-              accept="image/dicom,image/*" 
+            <input
+              type="file"
+              ref="leftFileInput"
+              style="display: none"
+              accept="image/dicom,image/*"
               @change="handleFileChange($event, 'left')"
             />
             <div class="upload-icon">
               <i class="el-icon-upload"></i>
             </div>
-            <div class="upload-text">
-              点击上传DICOM影像
-            </div>
+            <div class="upload-text">点击上传DICOM影像</div>
           </div>
-          
-          <div class="preview-area" v-if="leftImage">
+
+          <div class="image-container" v-if="leftImage">
             <img :src="leftImage" alt="左眼影像" />
-            <div class="image-progress">
-              <div class="progress-bar" :style="{ width: leftProgress + '%' }"></div>
-              <div class="progress-text">{{ leftProgress }}%</div>
+            <div class="image-actions">
+              <el-button
+                type="danger"
+                icon="el-icon-delete"
+                circle
+                size="mini"
+                @click="removeImage('left')"
+              ></el-button>
             </div>
           </div>
         </div>
       </div>
-      
+
       <!-- 右侧上传区域 -->
       <div class="upload-card">
         <div class="card-header">
@@ -54,51 +58,55 @@
           <span>右眼影像</span>
         </div>
         <div class="card-body">
-          <div 
-            class="upload-area" 
-            @click="triggerUpload('right')" 
-            @drop.prevent="handleDrop($event, 'right')" 
+          <div
+            class="upload-area"
+            @click="triggerUpload('right')"
+            @drop.prevent="handleDrop($event, 'right')"
             @dragover.prevent
+            v-if="!rightImage"
           >
-            <input 
-              type="file" 
-              ref="rightFileInput" 
-              style="display: none" 
-              accept="image/dicom,image/*" 
+            <input
+              type="file"
+              ref="rightFileInput"
+              style="display: none"
+              accept="image/dicom,image/*"
               @change="handleFileChange($event, 'right')"
             />
             <div class="upload-icon">
               <i class="el-icon-upload"></i>
             </div>
-            <div class="upload-text">
-              点击上传DICOM影像
-            </div>
+            <div class="upload-text">点击上传DICOM影像</div>
           </div>
-          
-          <div class="preview-area" v-if="rightImage">
+
+          <div class="image-container" v-if="rightImage">
             <img :src="rightImage" alt="右眼影像" />
-            <div class="image-progress">
-              <div class="progress-bar" :style="{ width: rightProgress + '%' }"></div>
-              <div class="progress-text">{{ rightProgress }}%</div>
+            <div class="image-actions">
+              <el-button
+                type="danger"
+                icon="el-icon-delete"
+                circle
+                size="mini"
+                @click="removeImage('right')"
+              ></el-button>
             </div>
           </div>
         </div>
       </div>
     </div>
-    
+
     <!-- 底部操作区域 -->
     <div class="action-area">
-      <el-button 
-        type="primary" 
-        class="analyze-button" 
-        :disabled="!canAnalyze" 
+      <el-button
+        type="primary"
+        class="analyze-button"
+        :disabled="!canAnalyze"
         @click="startAnalysis"
       >
         <i class="el-icon-video-play"></i>
         开始智能分析
       </el-button>
     </div>
-    
+
     <!-- 结果展示区域 -->
     <div class="result-area" v-if="analysisResult">
       <div class="result-header">
@@ -106,30 +114,41 @@
         <h2>分析结果</h2>
         <div class="tech-line right"></div>
       </div>
-      
+
       <div class="result-cards">
-        <div class="result-card" v-for="(result, index) in analysisResult" :key="index">
+        <div
+          class="result-card"
+          v-for="(result, index) in analysisResult"
+          :key="index"
+        >
           <div class="result-image">
             <img :src="index === 0 ? leftImage : rightImage" alt="眼底图像" />
           </div>
           <div class="result-info">
-            <div class="result-title">{{ index === 0 ? '左眼' : '右眼' }}分析结果</div>
+            <div class="result-title">
+              {{ index === 0 ? "左眼" : "右眼" }}分析结果
+            </div>
             <div class="result-item" v-for="(item, i) in result.items" :key="i">
               <div class="item-name">{{ item.name }}:</div>
-              <div class="item-value" :class="{ 'abnormal': item.abnormal }">
+              <div class="item-value" :class="{ abnormal: item.abnormal }">
                 {{ item.value }}
                 <i v-if="item.abnormal" class="el-icon-warning-outline"></i>
               </div>
             </div>
-            <div class="result-conclusion" :class="{ 'abnormal': result.abnormal }">
-              <i :class="result.abnormal ? 'el-icon-warning' : 'el-icon-success'"></i>
+            <div
+              class="result-conclusion"
+              :class="{ abnormal: result.abnormal }"
+            >
+              <i
+                :class="result.abnormal ? 'el-icon-warning' : 'el-icon-success'"
+              ></i>
               {{ result.conclusion }}
             </div>
           </div>
         </div>
       </div>
     </div>
-    
+
     <!-- 处理中遮罩 -->
     <div class="processing-overlay" v-if="isProcessing">
       <div class="processing-content">
@@ -140,7 +159,10 @@
         <div class="processing-text">正在进行智能分析...</div>
         <div class="processing-progress">
           <div class="progress-track">
-            <div class="progress-fill" :style="{ width: processingProgress + '%' }"></div>
+            <div
+              class="progress-fill"
+              :style="{ width: processingProgress + '%' }"
+            ></div>
           </div>
           <div class="progress-value">{{ processingProgress }}%</div>
         </div>
@@ -151,7 +173,7 @@
 
 <script>
 export default {
-  name: 'Classification',
+  name: "Classification",
   data() {
     return {
       leftImage: null,
@@ -160,59 +182,59 @@ export default {
       rightProgress: 0,
       isProcessing: false,
       processingProgress: 0,
-      analysisResult: null
-    }
+      analysisResult: null,
+    };
   },
   computed: {
     canAnalyze() {
       return (this.leftImage || this.rightImage) && !this.isProcessing;
-    }
+    },
   },
   methods: {
     triggerUpload(side) {
-      this.$refs[side + 'FileInput'].click();
+      this.$refs[side + "FileInput"].click();
     },
-    
+
     handleFileChange(event, side) {
       const file = event.target.files[0];
       if (!file) return;
-      
+
       this.simulateUpload(file, side);
     },
-    
+
     handleDrop(event, side) {
       const file = event.dataTransfer.files[0];
       if (!file) return;
-      
+
       this.simulateUpload(file, side);
     },
-    
+
     simulateUpload(file, side) {
       // 模拟上传进度
       const reader = new FileReader();
-      
+
       reader.onload = (e) => {
-        this[side + 'Image'] = e.target.result;
-        this[side + 'Progress'] = 100;
+        this[side + "Image"] = e.target.result;
+        this[side + "Progress"] = 100;
       };
-      
+
       reader.onprogress = (e) => {
         if (e.lengthComputable) {
-          this[side + 'Progress'] = Math.round((e.loaded / e.total) * 100);
+          this[side + "Progress"] = Math.round((e.loaded / e.total) * 100);
         }
       };
-      
+
       reader.readAsDataURL(file);
     },
-    
+
     startAnalysis() {
       this.isProcessing = true;
       this.processingProgress = 0;
-      
+
       // 模拟分析过程
       const interval = setInterval(() => {
         this.processingProgress += 5;
-        
+
         if (this.processingProgress >= 100) {
           clearInterval(interval);
           this.isProcessing = false;
@@ -220,39 +242,48 @@ export default {
         }
       }, 200);
     },
-    
+
     showResults() {
       // 模拟分析结果
       this.analysisResult = [
         {
           abnormal: true,
-          conclusion: '检测到糖尿病视网膜病变',
+          conclusion: "检测到糖尿病视网膜病变",
           items: [
-            { name: '视网膜出血', value: '已检测到', abnormal: true },
-            { name: '硬性渗出', value: '已检测到', abnormal: true },
-            { name: '棉絮斑', value: '未检测到', abnormal: false },
-            { name: '视网膜微血管瘤', value: '已检测到', abnormal: true },
-            { name: '新生血管', value: '未检测到', abnormal: false }
-          ]
-        }
+            { name: "视网膜出血", value: "已检测到", abnormal: true },
+            { name: "硬性渗出", value: "已检测到", abnormal: true },
+            { name: "棉絮斑", value: "未检测到", abnormal: false },
+            { name: "视网膜微血管瘤", value: "已检测到", abnormal: true },
+            { name: "新生血管", value: "未检测到", abnormal: false },
+          ],
+        },
       ];
-      
+
       if (this.rightImage) {
         this.analysisResult.push({
           abnormal: false,
-          conclusion: '未检测到明显异常',
+          conclusion: "未检测到明显异常",
           items: [
-            { name: '视网膜出血', value: '未检测到', abnormal: false },
-            { name: '硬性渗出', value: '未检测到', abnormal: false },
-            { name: '棉絮斑', value: '未检测到', abnormal: false },
-            { name: '视网膜微血管瘤', value: '未检测到', abnormal: false },
-            { name: '新生血管', value: '未检测到', abnormal: false }
-          ]
+            { name: "视网膜出血", value: "未检测到", abnormal: false },
+            { name: "硬性渗出", value: "未检测到", abnormal: false },
+            { name: "棉絮斑", value: "未检测到", abnormal: false },
+            { name: "视网膜微血管瘤", value: "未检测到", abnormal: false },
+            { name: "新生血管", value: "未检测到", abnormal: false },
+          ],
         });
       }
-    }
-  }
-}
+    },
+
+    removeImage(side) {
+      this[side + "Image"] = null;
+      this[side + "Progress"] = 0;
+      this[side + "File"] = null;
+      if (this.$refs[side + "FileInput"]) {
+        this.$refs[side + "FileInput"].value = "";
+      }
+    },
+  },
+};
 </script>
 
 <style scoped>
@@ -275,30 +306,30 @@ export default {
 }
 
 .tech-header h1 {
-  color: #8DD1FE;
+  color: #8dd1fe;
   font-size: 24px;
   margin: 0 15px;
   text-shadow: 0 0 10px rgba(57, 175, 253, 0.5);
 }
 
 .highlight {
-  color: #39AFFD;
+  color: #39affd;
   font-weight: bold;
 }
 
 .tech-line {
   height: 2px;
   width: 100px;
-  background: linear-gradient(to right, rgba(57, 175, 253, 0), #39AFFD);
+  background: linear-gradient(to right, rgba(57, 175, 253, 0), #39affd);
   position: relative;
 }
 
 .tech-line.left {
-  background: linear-gradient(to right, rgba(57, 175, 253, 0), #39AFFD);
+  background: linear-gradient(to right, rgba(57, 175, 253, 0), #39affd);
 }
 
 .tech-line.right {
-  background: linear-gradient(to right, #39AFFD, rgba(57, 175, 253, 0));
+  background: linear-gradient(to right, #39affd, rgba(57, 175, 253, 0));
 }
 
 .tech-content {
@@ -325,7 +356,7 @@ export default {
 .card-header {
   background: rgba(16, 32, 67, 0.8);
   padding: 10px 15px;
-  color: #8DD1FE;
+  color: #8dd1fe;
   font-size: 16px;
   display: flex;
   align-items: center;
@@ -334,7 +365,7 @@ export default {
 
 .card-header i {
   margin-right: 8px;
-  color: #39AFFD;
+  color: #39affd;
 }
 
 .card-body {
@@ -362,7 +393,7 @@ export default {
 }
 
 .upload-area:hover {
-  border-color: #39AFFD;
+  border-color: #39affd;
   background: rgba(57, 175, 253, 0.05);
 }
 
@@ -373,11 +404,11 @@ export default {
 }
 
 .upload-text {
-  color: #8DD1FE;
+  color: #8dd1fe;
   text-align: center;
 }
 
-.preview-area {
+.image-container {
   width: 100%;
   height: 100%;
   position: relative;
@@ -387,36 +418,33 @@ export default {
   align-items: center;
 }
 
-.preview-area img {
+.image-container img {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
   border-radius: 4px;
 }
 
-.image-progress {
-  width: 100%;
-  height: 6px;
-  background: rgba(16, 32, 67, 0.5);
-  border-radius: 3px;
-  margin-top: 10px;
-  position: relative;
-  overflow: hidden;
-}
-
-.progress-bar {
-  height: 100%;
-  background: linear-gradient(to right, #3077b1, #39affd);
-  border-radius: 3px;
-  transition: width 0.3s ease;
-}
-
-.progress-text {
+.image-actions {
   position: absolute;
-  top: -18px;
-  right: 0;
-  color: #39AFFD;
-  font-size: 12px;
+  top: 5px;
+  right: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-actions button {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  padding: 4px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.image-actions button:hover {
+  background: rgba(255, 255, 255, 0.4);
 }
 
 .action-area {
@@ -460,7 +488,7 @@ export default {
 }
 
 .result-header h2 {
-  color: #8DD1FE;
+  color: #8dd1fe;
   font-size: 20px;
   margin: 0 15px;
 }
@@ -502,7 +530,7 @@ export default {
 }
 
 .result-title {
-  color: #39AFFD;
+  color: #39affd;
   font-size: 18px;
   font-weight: bold;
   margin-bottom: 15px;
@@ -519,11 +547,11 @@ export default {
 }
 
 .item-name {
-  color: #8DD1FE;
+  color: #8dd1fe;
 }
 
 .item-value {
-  color: #8DD1FE;
+  color: #8dd1fe;
   display: flex;
   align-items: center;
 }
@@ -541,7 +569,7 @@ export default {
   padding: 10px;
   background: rgba(16, 32, 67, 0.5);
   border-radius: 4px;
-  color: #39AFFD;
+  color: #39affd;
   display: flex;
   align-items: center;
   font-weight: bold;
@@ -593,7 +621,7 @@ export default {
   width: 100%;
   height: 100%;
   border: 4px solid transparent;
-  border-top-color: #39AFFD;
+  border-top-color: #39affd;
   border-radius: 50%;
   animation: spin 1.5s linear infinite;
 }
@@ -605,24 +633,35 @@ export default {
   transform: translate(-50%, -50%);
   width: 60%;
   height: 60%;
-  background: radial-gradient(circle, #39AFFD 0%, rgba(57, 175, 253, 0) 70%);
+  background: radial-gradient(circle, #39affd 0%, rgba(57, 175, 253, 0) 70%);
   border-radius: 50%;
   opacity: 0.7;
   animation: pulse 2s ease-in-out infinite;
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes pulse {
-  0% { opacity: 0.5; transform: translate(-50%, -50%) scale(0.8); }
-  50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.2); }
-  100% { opacity: 0.5; transform: translate(-50%, -50%) scale(0.8); }
+  0% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  50% {
+    opacity: 0.8;
+    transform: translate(-50%, -50%) scale(1.2);
+  }
+  100% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
 }
 
 .processing-text {
-  color: #8DD1FE;
+  color: #8dd1fe;
   font-size: 18px;
   margin-bottom: 20px;
 }
@@ -651,7 +690,7 @@ export default {
 }
 
 .progress-value {
-  color: #39AFFD;
+  color: #39affd;
   font-size: 16px;
   font-weight: bold;
   min-width: 50px;
@@ -663,7 +702,7 @@ export default {
   .tech-content {
     flex-direction: column;
   }
-  
+
   .result-cards {
     flex-direction: column;
   }

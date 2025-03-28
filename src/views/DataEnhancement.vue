@@ -27,10 +27,10 @@
             :on-success="handleUploadSuccess"
             :on-error="handleUploadError"
             :before-upload="beforeUpload"
-            :headers="uploadHeaders"
             name="file"
             :with-credentials="false"
             :limit="1"
+            ref="upload"
           >
             <div class="upload-placeholder" v-if="!originalImage">
               <i class="el-icon-upload"></i>
@@ -55,9 +55,7 @@
           type="primary"
           class="process-button"
           @click="applyAugmentation"
-          :disabled="
-            !originalImage || selectedAugmentations.length === 0 || !imageId
-          "
+          :disabled="!originalImage || selectedAugmentations.length === 0"
           :loading="processing"
         >
           <i class="el-icon-refresh-right"></i> 执行数据增强
@@ -105,23 +103,15 @@ export default {
       processing: false,
       selectedAugmentations: [],
       originalImage: "",
-      imageId: null,
+      originalImageFile: null, // 保存原始图像文件对象
       augmentedImages: [],
       augmentations: [
         { label: "随机旋转", value: "rotate" },
         { label: "水平翻转", value: "flip" },
-        { label: "亮度对比度调整", value: "contrast" },
+        { label: "低光增强", value: "contrast" },
       ],
-      uploadUrl: "http://localhost:8081/api/image/upload",
-      apiBaseUrl: "http://localhost:8081/api",
+      uploadUrl: "/predict/lowlight", // 低光增强接口
     };
-  },
-  computed: {
-    uploadHeaders() {
-      return {
-        "Content-Type": "multipart/form-data",
-      };
-    },
   },
   methods: {
     toggleAugmentation(value) {
@@ -148,9 +138,17 @@ export default {
       return true;
     },
     handleUploadSuccess(response) {
-      if (response.success) {
-        this.imageId = response.data.imageId;
-        this.originalImage = `${this.apiBaseUrl}/image/${this.imageId}`;
+      if (response && response.outputs && response.outputs.length > 0) {
+        // 保存原始图像路径
+        this.originalImage = `/download/${response.outputs[0]}`;
+
+        // 获取原始图像文件（用于前端处理）
+        if (this.$refs.upload.uploadFiles.length > 0) {
+          this.originalImageFile = this.$refs.upload.uploadFiles[0].raw;
+          // 创建一个临时的URL以供前端增强功能使用
+          this.originalImageUrl = URL.createObjectURL(this.originalImageFile);
+        }
+
         this.augmentedImages = []; // 清空之前的增强结果
         this.$message.success("图像上传成功");
       } else {
@@ -162,60 +160,22 @@ export default {
       this.$message.error("图像上传失败，请重试");
     },
     async applyAugmentation() {
-      if (!this.imageId || this.selectedAugmentations.length === 0) return;
+      if (!this.originalImage || this.selectedAugmentations.length === 0)
+        return;
 
       try {
         this.processing = true;
+        this.augmentedImages = [];
 
-        // 构建请求参数
-        const params = new URLSearchParams();
-        params.append("imageId", this.imageId);
-        params.append("rotate", this.selectedAugmentations.includes("rotate"));
-        params.append("flip", this.selectedAugmentations.includes("flip"));
-        params.append(
-          "contrast",
-          this.selectedAugmentations.includes("contrast")
-        );
+        // 前端实现的增强操作
+        await this.processClientSideAugmentations();
 
-        // 调用后端API
-        const response = await axios.post(
-          `${this.apiBaseUrl}/image/enhance`,
-          params
-        );
-
-        if (response.data.success) {
-          const enhancedImagesData = response.data.data.enhancedImages;
-          this.augmentedImages = [];
-
-          // 处理返回的增强图像
-          if (enhancedImagesData.rotated) {
-            this.augmentedImages.push({
-              url: enhancedImagesData.rotated,
-              label: "随机旋转",
-              downloadUrl: enhancedImagesData.rotated,
-            });
-          }
-
-          if (enhancedImagesData.flipped) {
-            this.augmentedImages.push({
-              url: enhancedImagesData.flipped,
-              label: "水平翻转",
-              downloadUrl: enhancedImagesData.flipped,
-            });
-          }
-
-          if (enhancedImagesData.contrasted) {
-            this.augmentedImages.push({
-              url: enhancedImagesData.contrasted,
-              label: "亮度对比度调整",
-              downloadUrl: enhancedImagesData.contrasted,
-            });
-          }
-
-          this.$message.success("增强处理完成");
-        } else {
-          this.$message.error(response.data.message || "处理失败");
+        // 如果选择了低光增强，调用后端API
+        if (this.selectedAugmentations.includes("contrast")) {
+          await this.processServerSideAugmentations();
         }
+
+        this.$message.success("增强处理完成");
       } catch (error) {
         console.error("增强处理错误:", error);
         this.$message.error("增强处理失败，请重试");
@@ -223,23 +183,169 @@ export default {
         this.processing = false;
       }
     },
+
+    // 前端实现的图像增强
+    async processClientSideAugmentations() {
+      if (!this.originalImageFile) return;
+
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          // 创建画布
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+
+          // 设置画布大小与图像一致
+          canvas.width = img.width;
+          canvas.height = img.height;
+
+          // 随机旋转
+          if (this.selectedAugmentations.includes("rotate")) {
+            const rotatedCanvas = this.rotateImage(img);
+            const rotatedDataUrl = rotatedCanvas.toDataURL("image/jpeg");
+
+            this.augmentedImages.push({
+              url: rotatedDataUrl,
+              label: "随机旋转",
+              downloadUrl: rotatedDataUrl,
+            });
+          }
+
+          // 水平翻转
+          if (this.selectedAugmentations.includes("flip")) {
+            const flippedCanvas = this.flipImage(img);
+            const flippedDataUrl = flippedCanvas.toDataURL("image/jpeg");
+
+            this.augmentedImages.push({
+              url: flippedDataUrl,
+              label: "水平翻转",
+              downloadUrl: flippedDataUrl,
+            });
+          }
+
+          resolve();
+        };
+
+        // 设置图像源
+        img.src = this.originalImageUrl || this.originalImage;
+      });
+    },
+
+    // 随机旋转图像
+    rotateImage(img) {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      // 随机角度 (0-360度)
+      const angle = Math.floor(Math.random() * 360);
+
+      // 计算旋转后的画布尺寸
+      const radians = (angle * Math.PI) / 180;
+      const sin = Math.abs(Math.sin(radians));
+      const cos = Math.abs(Math.cos(radians));
+      const newWidth = Math.floor(img.width * cos + img.height * sin);
+      const newHeight = Math.floor(img.width * sin + img.height * cos);
+
+      canvas.width = newWidth;
+      canvas.height = newHeight;
+
+      // 将原点移到画布中心
+      ctx.translate(newWidth / 2, newHeight / 2);
+      // 旋转画布
+      ctx.rotate(radians);
+      // 绘制图像，并移回原点
+      ctx.drawImage(
+        img,
+        -img.width / 2,
+        -img.height / 2,
+        img.width,
+        img.height
+      );
+
+      return canvas;
+    },
+
+    // 水平翻转图像
+    flipImage(img) {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      canvas.width = img.width;
+      canvas.height = img.height;
+
+      // 水平翻转
+      ctx.translate(img.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, 0, 0, img.width, img.height);
+
+      return canvas;
+    },
+
+    // 后端低光增强处理
+    async processServerSideAugmentations() {
+      if (!this.selectedAugmentations.includes("contrast")) return;
+
+      // 只有在选择了低光增强时才调用API
+      const formData = new FormData();
+      formData.append("file", this.originalImageFile);
+
+      const response = await fetch("/predict/lowlight", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("低光增强请求失败");
+      }
+
+      const result = await response.json();
+
+      if (result && result.outputs && result.outputs.length > 0) {
+        // 添加低光增强结果（通常是第一张图）
+        this.augmentedImages.push({
+          url: `/download/${result.outputs[0]}`,
+          label: "低光增强",
+          downloadUrl: `/download/${result.outputs[0]}`,
+        });
+      }
+    },
+
+    // 下载增强后的图像
     async downloadAugmentedImages() {
       if (!this.augmentedImages || this.augmentedImages.length === 0) return;
 
       try {
-        // 创建一个zip文件包含所有增强图像
-        // 这里简化为下载第一张图片
-        const image = this.augmentedImages[0];
-        const response = await fetch(image.url);
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `enhanced_${image.label}.jpg`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+        for (let i = 0; i < this.augmentedImages.length; i++) {
+          const image = this.augmentedImages[i];
+
+          // 如果是数据URL，直接下载
+          if (image.url.startsWith("data:")) {
+            const a = document.createElement("a");
+            a.href = image.url;
+            a.download = `enhanced_${image.label}.jpg`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          }
+          // 如果是服务器路径，使用fetch下载
+          else {
+            const response = await fetch(image.url);
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `enhanced_${image.label}.jpg`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+          }
+
+          // 每次下载间隔500ms，避免浏览器阻止多次下载
+          if (i < this.augmentedImages.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
+        }
       } catch (error) {
         console.error("下载错误:", error);
         this.$message.error("下载失败，请重试");
@@ -336,6 +442,7 @@ export default {
   justify-content: center;
   position: relative;
   overflow: auto;
+  background-color: #000; /* 黑色背景更适合医学图像显示 */
 }
 
 .empty-state {
