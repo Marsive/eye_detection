@@ -104,6 +104,7 @@ export default {
       selectedAugmentations: [],
       originalImage: "",
       originalImageFile: null, // 保存原始图像文件对象
+      originalImageUrl: "", // 添加明确的originalImageUrl属性
       augmentedImages: [],
       augmentations: [
         { label: "随机旋转", value: "rotate" },
@@ -158,6 +159,19 @@ export default {
     handleUploadError(error) {
       console.error("上传错误:", error);
       this.$message.error("图像上传失败，请重试");
+    },
+    handleFileChange(file) {
+      if (!file) return;
+
+      // 验证已在beforeUpload中完成
+      this.originalImageFile = file.raw;
+
+      // 创建预览URL
+      this.originalImageUrl = URL.createObjectURL(file.raw);
+      this.originalImage = this.originalImageUrl;
+
+      this.augmentedImages = []; // 清空之前的增强结果
+      this.$message.success("图像已选择");
     },
     async applyAugmentation() {
       if (!this.originalImage || this.selectedAugmentations.length === 0)

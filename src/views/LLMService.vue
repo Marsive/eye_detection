@@ -6,28 +6,30 @@
       <h1><span class="highlight">Deepdetect</span></h1>
       <div class="tech-line right"></div>
     </div>
-    
+
     <!-- 主体聊天区域 -->
     <div class="chat-container">
       <!-- 左侧会话列表 -->
       <div class="conversation-list">
         <div class="list-header">
           <h3>对话记录</h3>
-          <el-button 
-            type="primary" 
-            class="new-chat-btn" 
-            icon="el-icon-plus" 
-            @click="createNewChat">
+          <el-button
+            type="primary"
+            class="new-chat-btn"
+            icon="el-icon-plus"
+            @click="createNewChat"
+          >
             新建会话
           </el-button>
         </div>
-        
+
         <div class="conversation-items">
-          <div 
-            v-for="(chat, index) in chatHistory" 
+          <div
+            v-for="(chat, index) in chatHistory"
             :key="index"
             :class="['conversation-item', activeChat === index ? 'active' : '']"
-            @click="switchChat(index)">
+            @click="switchChat(index)"
+          >
             <i class="el-icon-chat-dot-round"></i>
             <div class="chat-info">
               <div class="chat-title">会话{{ index + 1 }}</div>
@@ -39,30 +41,43 @@
           </div>
         </div>
       </div>
-      
+
       <!-- 右侧聊天内容区域 -->
       <div class="chat-content">
         <!-- 消息列表 -->
         <div class="message-list" ref="messageList">
           <template v-if="currentMessages.length > 0">
-            <div 
-              v-for="(message, index) in currentMessages" 
+            <div
+              v-for="(message, index) in currentMessages"
               :key="index"
-              :class="['message-item', message.role === 'user' ? 'user-message' : 'ai-message']">
+              :class="[
+                'message-item',
+                message.role === 'user' ? 'user-message' : 'ai-message',
+              ]"
+            >
               <div class="message-avatar">
-                <i :class="message.role === 'user' ? 'el-icon-user' : 'el-icon-cpu'"></i>
+                <i
+                  :class="
+                    message.role === 'user' ? 'el-icon-user' : 'el-icon-cpu'
+                  "
+                ></i>
               </div>
               <div class="message-content">
-                <div class="message-text" v-if="message.role === 'user'">{{ message.content }}</div>
-                <div 
-                  class="message-text markdown-content" 
-                  v-else-if="!message.isLoading" 
-                  v-html="parseMarkdown(message.content)">
+                <div class="message-text" v-if="message.role === 'user'">
+                  {{ message.content }}
                 </div>
+                <div
+                  class="message-text markdown-content"
+                  v-else-if="!message.isLoading"
+                  v-html="parseMarkdown(message.content)"
+                ></div>
                 <div class="message-text loading-message" v-else>
                   <span class="dot"></span>
                   <span class="dot"></span>
                   <span class="dot"></span>
+                </div>
+                <div v-if="message.hasImage" class="message-image">
+                  <img :src="message.imageUrl" alt="图像" />
                 </div>
                 <div class="message-time">{{ message.timestamp }}</div>
               </div>
@@ -75,51 +90,69 @@
               </div>
               <h3>开始与AI助手对话</h3>
               <p>询问有关眼疾诊断、图像分析或医学知识的问题</p>
-              
+
               <div class="suggestion-chips">
-                <div class="chip" @click="usePrompt('解释一下糖尿病视网膜病变的特征')">
+                <div
+                  class="chip"
+                  @click="usePrompt('解释一下糖尿病视网膜病变的特征')"
+                >
                   解释一下糖尿病视网膜病变的特征
                 </div>
-                <div class="chip" @click="usePrompt('如何区分青光眼和白内障？')">
+                <div
+                  class="chip"
+                  @click="usePrompt('如何区分青光眼和白内障？')"
+                >
                   如何区分青光眼和白内障？
                 </div>
-                <div class="chip" @click="usePrompt('分析眼底图像中的异常区域')">
+                <div
+                  class="chip"
+                  @click="usePrompt('分析眼底图像中的异常区域')"
+                >
                   分析眼底图像中的异常区域
                 </div>
               </div>
             </div>
           </template>
         </div>
-        
+
         <!-- 输入区域 -->
         <div class="chat-input-container">
+          <div v-if="uploadedImage" class="image-preview-container">
+            <div class="image-preview">
+              <img :src="uploadedImage" alt="预览图像" />
+              <div class="image-actions" @click="removeUploadedImage">
+                <i class="el-icon-close"></i>
+              </div>
+            </div>
+          </div>
+
           <div class="chat-input-wrapper">
-            <textarea 
-              class="chat-input" 
-              v-model="inputMessage" 
-              placeholder="请输入内容，Shift + Enter 换行" 
+            <textarea
+              class="chat-input"
+              v-model="inputMessage"
+              placeholder="请输入内容，Shift + Enter 换行"
               @keydown.shift.enter.exact.prevent="handleShiftEnter"
               @keydown.enter.exact.prevent="sendMessage()"
               @keydown.shift="isShiftPressed = true"
               @keyup.shift="isShiftPressed = false"
             ></textarea>
-            
+
             <div class="input-actions">
               <div class="upload-btn" @click="triggerImageUpload">
                 <i class="el-icon-picture-outline"></i>
               </div>
-              <input 
-                type="file" 
-                ref="imageInput" 
-                style="display: none" 
-                accept="image/*" 
+              <input
+                type="file"
+                ref="imageInput"
+                style="display: none"
+                accept="image/*"
                 @change="handleImageUpload"
               />
-              <div style="flex: 1;"></div>
-              <el-button 
-                type="primary" 
-                class="send-btn" 
-                :disabled="!inputMessage.trim()" 
+              <div style="flex: 1"></div>
+              <el-button
+                type="primary"
+                class="send-btn"
+                :disabled="!inputMessage.trim()"
                 @click="sendMessage"
               >
                 发送
@@ -134,25 +167,28 @@
 </template>
 
 <script>
-import apiClient from '@/api/ApiClient';
-import MarkdownIt from 'markdown-it';
+import apiClient from "@/api/ApiClient";
+import MarkdownIt from "markdown-it";
 
 export default {
-  name: 'LLMService',
+  name: "LLMService",
   data() {
     return {
       chatHistory: [],
       activeChat: 0,
-      inputMessage: '',
+      inputMessage: "",
       isLoading: false,
       isShiftPressed: false,
-      md: new MarkdownIt()
-    }
+      md: new MarkdownIt(),
+      uploadedImage: null,
+      uploadedFile: null,
+      sessionIds: {},
+    };
   },
   computed: {
     currentMessages() {
       return this.chatHistory[this.activeChat]?.messages || [];
-    }
+    },
   },
   created() {
     // 初始化一个默认会话
@@ -163,32 +199,51 @@ export default {
   methods: {
     createNewChat() {
       const now = new Date();
-      const timestamp = `${now.getFullYear()}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-      
+      const timestamp = `${now.getFullYear()}/${(now.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}/${now.getDate().toString().padStart(2, "0")} ${now
+        .getHours()
+        .toString()
+        .padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now
+        .getSeconds()
+        .toString()
+        .padStart(2, "0")}`;
+
+      const chatIndex = this.chatHistory.length;
+      const sessionId =
+        "session_" +
+        Date.now() +
+        "_" +
+        Math.random().toString(36).substring(2, 9);
+
       this.chatHistory.push({
         timestamp,
-        messages: []
+        messages: [],
       });
-      
-      this.activeChat = this.chatHistory.length - 1;
+
+      this.$set(this.sessionIds, chatIndex, sessionId);
+
+      this.activeChat = chatIndex;
     },
     switchChat(index) {
       this.activeChat = index;
     },
     showChatOptions(index) {
       // 实现会话选项菜单
-      this.$confirm('是否删除此会话?', '提示', {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }).then(() => {
-        this.chatHistory.splice(index, 1);
-        if (this.chatHistory.length === 0) {
-          this.createNewChat();
-        } else if (this.activeChat >= this.chatHistory.length) {
-          this.activeChat = this.chatHistory.length - 1;
-        }
-      }).catch(() => {});
+      this.$confirm("是否删除此会话?", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      })
+        .then(() => {
+          this.chatHistory.splice(index, 1);
+          if (this.chatHistory.length === 0) {
+            this.createNewChat();
+          } else if (this.activeChat >= this.chatHistory.length) {
+            this.activeChat = this.chatHistory.length - 1;
+          }
+        })
+        .catch(() => {});
     },
     handleEnter(e) {
       if (e.shiftKey) {
@@ -198,24 +253,28 @@ export default {
       e.preventDefault();
       this.sendMessage();
     },
-    
+
     // 获取格式化的时间
     getFormattedTime() {
       const now = new Date();
-      return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+      return `${now.getHours().toString().padStart(2, "0")}:${now
+        .getMinutes()
+        .toString()
+        .padStart(2, "0")}`;
     },
-    
+
     // 添加消息到当前会话
     addMessage(message) {
       this.chatHistory[this.activeChat].messages.push(message);
       this.scrollToBottom();
     },
-    
+
     // 滚动到底部
     scrollToBottom() {
       this.$nextTick(() => {
         if (this.$refs.messageList) {
-          this.$refs.messageList.scrollTop = this.$refs.messageList.scrollHeight;
+          this.$refs.messageList.scrollTop =
+            this.$refs.messageList.scrollHeight;
         }
       });
     },
@@ -226,47 +285,70 @@ export default {
     },
 
     async sendMessage() {
-      if (!this.inputMessage.trim()) return;
+      if (!this.inputMessage.trim() && !this.uploadedFile) return;
 
       // 添加用户消息
       const userMessage = {
         role: "user",
         content: this.inputMessage,
-        timestamp: this.getFormattedTime()
+        timestamp: this.getFormattedTime(),
       };
+
+      if (this.uploadedImage) {
+        userMessage.hasImage = true;
+        userMessage.imageUrl = this.uploadedImage;
+      }
+
       this.addMessage(userMessage);
-      
+
       const userContent = this.inputMessage;
       this.inputMessage = "";
 
+      const tempFile = this.uploadedFile;
+      this.uploadedImage = null;
+      this.uploadedFile = null;
+
       try {
         this.isLoading = true;
-        
-        // 添加加载状态消息
-        const loadingId = this.addLoadingMessage();
-        
-        // 调用后端API
-        const response = await apiClient.post('/chat/completions', {
-          model: "deepseek-chat",
-          messages: [{
-            role: "user",
-            content: userContent
-          }]
+
+        const loadingMessageId = this.addLoadingMessage();
+
+        const sessionId = this.sessionIds[this.activeChat];
+
+        const formData = new FormData();
+        formData.append("prompt", userContent);
+        formData.append("session_id", sessionId);
+
+        if (tempFile) {
+          formData.append("file", tempFile);
+        }
+
+        const response = await fetch("/predict/analysis", {
+          method: "POST",
+          body: formData,
         });
 
-        // 移除加载消息
-        this.removeLoadingMessage(loadingId);
+        const data = await response.json();
 
-        // 添加AI响应
-        const aiMessage = {
-          role: "assistant",
-          content: response.data.choices[0].message.content,
-          timestamp: this.getFormattedTime()
-        };
-        this.addMessage(aiMessage);
+        this.removeLoadingMessage(loadingMessageId);
 
+        if (data.status === "success") {
+          const aiMessage = {
+            role: "assistant",
+            content: data.analysis,
+            timestamp: this.getFormattedTime(),
+          };
+
+          if (data.processed_file) {
+            aiMessage.hasImage = true;
+            aiMessage.imageUrl = `/download/${data.processed_file}`;
+          }
+
+          this.addMessage(aiMessage);
+        } else {
+          throw new Error(data.error || "分析失败");
+        }
       } catch (error) {
-        // 移除所有加载消息
         this.removeAllLoadingMessages();
         this.handleError(error);
       } finally {
@@ -274,31 +356,28 @@ export default {
         this.scrollToBottom();
       }
     },
-    
-    // 添加加载状态消息
+
     addLoadingMessage() {
-      const loadingId = Date.now(); // 使用时间戳作为唯一ID
+      const loadingId = Date.now();
       this.chatHistory[this.activeChat].messages.push({
         id: loadingId,
         role: "assistant",
         content: "思考中...",
         timestamp: this.getFormattedTime(),
-        isLoading: true
+        isLoading: true,
       });
       this.scrollToBottom();
       return loadingId;
     },
-    
-    // 移除加载状态消息
+
     removeLoadingMessage(id) {
       const messages = this.chatHistory[this.activeChat].messages;
-      const index = messages.findIndex(msg => msg.id === id && msg.isLoading);
+      const index = messages.findIndex((msg) => msg.id === id && msg.isLoading);
       if (index !== -1) {
         messages.splice(index, 1);
       }
     },
-    
-    // 移除所有加载状态消息
+
     removeAllLoadingMessages() {
       const messages = this.chatHistory[this.activeChat].messages;
       for (let i = messages.length - 1; i >= 0; i--) {
@@ -309,37 +388,71 @@ export default {
     },
 
     handleError(error) {
-      console.error('API Error:', error);
-      const errorMsg = error.response?.data?.error || '服务暂时不可用，请稍后再试';
+      console.error("API Error:", error);
+      const errorMsg =
+        error.response?.data?.error || "服务暂时不可用，请稍后再试";
 
       this.addMessage({
         role: "system",
         content: `错误：${errorMsg}`,
-        timestamp: this.getFormattedTime()
+        timestamp: this.getFormattedTime(),
       });
     },
-    
+
     usePrompt(prompt) {
       this.inputMessage = prompt;
     },
     uploadImage() {
-      this.$message.info('图像上传功能即将推出，敬请期待！');
+      this.$message.info("图像上传功能即将推出，敬请期待！");
     },
     handleShiftEnter(e) {
-      // Shift + Enter 换行，不发送
       return;
     },
     triggerImageUpload() {
+      if (this.isLoading) return;
       this.$refs.imageInput.click();
     },
     handleImageUpload(e) {
       const file = e.target.files[0];
-      if (file) {
-        this.uploadImage();
+      if (!file) return;
+
+      if (!this.validateImageFile(file)) {
+        return;
       }
-    }
-  }
-}
+
+      this.uploadedFile = file;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        this.uploadedImage = e.target.result;
+      };
+      reader.readAsDataURL(file);
+
+      this.$refs.imageInput.value = "";
+    },
+    validateImageFile(file) {
+      const validTypes = ["image/png", "image/jpeg", "image/jpg", "image/gif"];
+      const isValidType = validTypes.includes(file.type);
+      const isValidSize = file.size <= 16 * 1024 * 1024;
+
+      if (!isValidType) {
+        this.$message.error("只能上传PNG、JPG、JPEG或GIF格式图片!");
+        return false;
+      }
+
+      if (!isValidSize) {
+        this.$message.error("图片大小不能超过16MB!");
+        return false;
+      }
+
+      return true;
+    },
+    removeUploadedImage() {
+      this.uploadedImage = null;
+      this.uploadedFile = null;
+    },
+  },
+};
 </script>
 
 <style scoped>
@@ -361,30 +474,36 @@ export default {
 }
 
 .llm-header h1 {
-  color: #39AFFD;
+  color: #39affd;
   font-size: 28px;
   margin: 0 15px;
   text-shadow: 0 0 10px rgba(57, 175, 253, 0.5);
 }
 
 .llm-header .highlight {
-  color: #8DD1FE;
+  color: #8dd1fe;
 }
 
 .tech-line {
   height: 2px;
   width: 150px;
-  background: linear-gradient(90deg, rgba(57, 175, 253, 0), rgba(57, 175, 253, 0.8), rgba(57, 175, 253, 0));
+  background: linear-gradient(
+    90deg,
+    rgba(57, 175, 253, 0),
+    rgba(57, 175, 253, 0.8),
+    rgba(57, 175, 253, 0)
+  );
   position: relative;
 }
 
-.tech-line::before, .tech-line::after {
-  content: '';
+.tech-line::before,
+.tech-line::after {
+  content: "";
   position: absolute;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #39AFFD;
+  background: #39affd;
   top: -2px;
   box-shadow: 0 0 8px 2px rgba(57, 175, 253, 0.6);
 }
@@ -425,14 +544,14 @@ export default {
 
 .list-header h3 {
   margin: 0;
-  color: #8DD1FE;
+  color: #8dd1fe;
   font-size: 16px;
 }
 
 .new-chat-btn {
   background: rgba(57, 175, 253, 0.2);
   border: 1px solid rgba(57, 175, 253, 0.4);
-  color: #8DD1FE;
+  color: #8dd1fe;
   padding: 7px 12px;
   font-size: 12px;
 }
@@ -470,7 +589,7 @@ export default {
 }
 
 .conversation-item i {
-  color: #39AFFD;
+  color: #39affd;
   font-size: 18px;
   margin-right: 10px;
 }
@@ -481,7 +600,7 @@ export default {
 }
 
 .chat-title {
-  color: #8DD1FE;
+  color: #8dd1fe;
   font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
@@ -557,11 +676,11 @@ export default {
 }
 
 .user-message .message-avatar i {
-  color: #39AFFD;
+  color: #39affd;
 }
 
 .ai-message .message-avatar i {
-  color: #8DD1FE;
+  color: #8dd1fe;
 }
 
 .message-content {
@@ -604,19 +723,20 @@ export default {
 }
 
 .markdown-content :deep(code) {
-  font-family: Monaco, Consolas, 'Courier New', monospace;
+  font-family: Monaco, Consolas, "Courier New", monospace;
 }
 
 .markdown-content :deep(p) {
   margin: 8px 0;
 }
 
-.markdown-content :deep(ul), .markdown-content :deep(ol) {
+.markdown-content :deep(ul),
+.markdown-content :deep(ol) {
   padding-left: 20px;
 }
 
 .markdown-content :deep(a) {
-  color: #39AFFD;
+  color: #39affd;
   text-decoration: none;
 }
 
@@ -646,16 +766,18 @@ export default {
 }
 
 .chat-input-container::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(to right, 
-    rgba(57, 175, 253, 0), 
-    rgba(57, 175, 253, 0.5), 
-    rgba(57, 175, 253, 0));
+  background: linear-gradient(
+    to right,
+    rgba(57, 175, 253, 0),
+    rgba(57, 175, 253, 0.5),
+    rgba(57, 175, 253, 0)
+  );
 }
 
 .chat-input-wrapper {
@@ -669,7 +791,8 @@ export default {
 
 .chat-input-wrapper:focus-within {
   border-color: rgba(57, 175, 253, 0.6);
-  box-shadow: 0 0 20px rgba(57, 175, 253, 0.2), 0 0 10px rgba(57, 175, 253, 0.1) inset;
+  box-shadow: 0 0 20px rgba(57, 175, 253, 0.2),
+    0 0 10px rgba(57, 175, 253, 0.1) inset;
 }
 
 .chat-input {
@@ -708,7 +831,7 @@ export default {
   justify-content: center;
   border-radius: 50%;
   background: rgba(57, 175, 253, 0.1);
-  color: #8DD1FE;
+  color: #8dd1fe;
   cursor: pointer;
   margin-right: 10px;
   transition: all 0.3s ease;
@@ -716,7 +839,7 @@ export default {
 
 .upload-btn:hover {
   background: rgba(57, 175, 253, 0.2);
-  color: #39AFFD;
+  color: #39affd;
   transform: translateY(-2px);
   box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2);
 }
@@ -761,7 +884,7 @@ export default {
   border-radius: 4px;
   padding: 0 6px;
   font-size: 12px;
-  color: #8DD1FE;
+  color: #8dd1fe;
   margin-left: 5px;
 }
 
@@ -779,20 +902,29 @@ export default {
 .empty-icon {
   font-size: 48px;
   margin-bottom: 20px;
-  color: #39AFFD;
+  color: #39affd;
   animation: pulse 2s infinite;
 }
 
 @keyframes pulse {
-  0% { transform: scale(1); opacity: 0.7; }
-  50% { transform: scale(1.1); opacity: 1; }
-  100% { transform: scale(1); opacity: 0.7; }
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
 }
 
 .empty-chat h3 {
   font-size: 22px;
   margin-bottom: 10px;
-  color: #8DD1FE;
+  color: #8dd1fe;
 }
 
 .empty-chat p {
@@ -875,17 +1007,20 @@ export default {
 }
 
 @keyframes dot-pulse {
-  0%, 60%, 100% { 
+  0%,
+  60%,
+  100% {
     transform: scale(0.8);
     opacity: 0.6;
   }
-  30% { 
+  30% {
     transform: scale(1.2);
     opacity: 1;
   }
 }
 
-.conversation-items, .message-list {
+.conversation-items,
+.message-list {
   scrollbar-width: thin;
   scrollbar-color: rgba(57, 175, 253, 0.4) rgba(13, 28, 64, 0.3);
 }
@@ -946,14 +1081,14 @@ export default {
 }
 
 .upload-btn i {
-  color: #39AFFD;
+  color: #39affd;
   font-size: 18px;
 }
 
 .send-btn {
   background: rgba(57, 175, 253, 0.2);
   border: 1px solid rgba(57, 175, 253, 0.4);
-  color: #8DD1FE;
+  color: #8dd1fe;
 }
 
 .send-btn:hover {
@@ -1033,7 +1168,7 @@ export default {
 .dot {
   width: 8px;
   height: 8px;
-  background: #8DD1FE;
+  background: #8dd1fe;
   border-radius: 50%;
   margin: 0 3px;
   animation: bounce 1.4s infinite ease-in-out both;
@@ -1048,7 +1183,9 @@ export default {
 }
 
 @keyframes bounce {
-  0%, 80%, 100% {
+  0%,
+  80%,
+  100% {
     transform: scale(0);
   }
   40% {
@@ -1086,7 +1223,7 @@ export default {
 }
 
 .empty-chat h3 {
-  color: #8DD1FE;
+  color: #8dd1fe;
   margin-bottom: 10px;
 }
 
@@ -1104,7 +1241,7 @@ export default {
   border-radius: 16px;
   padding: 8px 16px;
   font-size: 13px;
-  color: #8DD1FE;
+  color: #8dd1fe;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -1113,5 +1250,4 @@ export default {
   background: rgba(57, 175, 253, 0.2);
   border-color: rgba(57, 175, 253, 0.5);
 }
-
 </style>

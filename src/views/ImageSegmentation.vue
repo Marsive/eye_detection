@@ -6,7 +6,7 @@
       <h1><span class="highlight">眼底图像分割</span></h1>
       <div class="tech-line right"></div>
     </div>
-    
+
     <!-- 主体内容区域 -->
     <div class="tech-content">
       <!-- 左侧上传区域 -->
@@ -29,19 +29,19 @@
             </div>
           </div>
         </div>
-        
+
         <div class="panel-body">
-          <div 
-            class="upload-area" 
-            @click="triggerUpload" 
-            @drop.prevent="handleDrop" 
+          <div
+            class="upload-area"
+            @click="triggerUpload"
+            @drop.prevent="handleDrop"
             @dragover.prevent
           >
-            <input 
-              type="file" 
-              ref="fileInput" 
-              style="display: none" 
-              accept="image/*" 
+            <input
+              type="file"
+              ref="fileInput"
+              style="display: none"
+              accept="image/*"
               @change="handleFileChange"
             />
             <div class="upload-icon">
@@ -52,14 +52,14 @@
               <div class="upload-hint">支持常见图片格式</div>
             </div>
           </div>
-          
+
           <div class="preview-area" v-if="uploadedImage">
             <div class="preview-header">
               <span>预览图像</span>
-              <el-button 
-                type="danger" 
-                size="mini" 
-                icon="el-icon-delete" 
+              <el-button
+                type="danger"
+                size="mini"
+                icon="el-icon-delete"
                 circle
                 @click="removeImage"
               ></el-button>
@@ -70,22 +70,22 @@
           </div>
         </div>
       </div>
-      
+
       <!-- 右侧结果区域 -->
       <div class="result-panel tech-panel">
         <div class="panel-header">
           <span>分割结果</span>
-          <el-button 
-            type="primary" 
-            class="start-button" 
-            :disabled="!uploadedImage || isProcessing" 
+          <el-button
+            type="primary"
+            class="start-button"
+            :disabled="!uploadedImage || isProcessing"
             @click="startSegmentation"
           >
             <i class="el-icon-magic-stick"></i>
             开始智能分割
           </el-button>
         </div>
-        
+
         <div class="panel-body">
           <div class="result-placeholder" v-if="!segmentationResult">
             <div class="placeholder-icon">
@@ -93,39 +93,41 @@
             </div>
             <div class="placeholder-text">
               上传图像后点击"开始智能分割"
-              <div class="placeholder-hint">系统将自动识别并分割眼底图像中的病变区域</div>
+              <div class="placeholder-hint">
+                系统将自动识别并分割眼底图像中的病变区域
+              </div>
             </div>
           </div>
-          
+
           <div class="result-content" v-else>
             <div class="result-tabs">
-              <div 
-                class="tab-item" 
+              <div
+                class="tab-item"
                 :class="{ active: activeTab === 'original' }"
                 @click="activeTab = 'original'"
               >
                 原始图像
               </div>
-              <div 
-                class="tab-item" 
+              <div
+                class="tab-item"
                 :class="{ active: activeTab === 'segmented' }"
                 @click="activeTab = 'segmented'"
               >
                 分割结果
               </div>
-              <div 
-                class="tab-item" 
+              <div
+                class="tab-item"
                 :class="{ active: activeTab === 'overlay' }"
                 @click="activeTab = 'overlay'"
               >
                 叠加显示
               </div>
             </div>
-            
+
             <div class="result-display">
               <img :src="currentDisplayImage" alt="分割结果" />
             </div>
-            
+
             <div class="result-info">
               <div class="info-card">
                 <div class="info-icon"><i class="el-icon-aim"></i></div>
@@ -134,7 +136,7 @@
                   <div class="info-label">分割区域</div>
                 </div>
               </div>
-              
+
               <div class="info-card">
                 <div class="info-icon"><i class="el-icon-timer"></i></div>
                 <div class="info-content">
@@ -142,7 +144,7 @@
                   <div class="info-label">处理时间</div>
                 </div>
               </div>
-              
+
               <div class="info-card">
                 <div class="info-icon"><i class="el-icon-data-line"></i></div>
                 <div class="info-content">
@@ -151,12 +153,20 @@
                 </div>
               </div>
             </div>
-            
+
             <div class="result-actions">
-              <el-button type="primary" icon="el-icon-download" @click="downloadResult">
+              <el-button
+                type="primary"
+                icon="el-icon-download"
+                @click="downloadResult"
+              >
                 下载结果
               </el-button>
-              <el-button type="success" icon="el-icon-document" @click="generateReport">
+              <el-button
+                type="success"
+                icon="el-icon-document"
+                @click="generateReport"
+              >
                 生成报告
               </el-button>
             </div>
@@ -164,7 +174,7 @@
         </div>
       </div>
     </div>
-    
+
     <!-- 处理中遮罩 -->
     <div class="tech-overlay" v-if="isProcessing">
       <div class="tech-processing">
@@ -175,7 +185,10 @@
         <div class="processing-text">正在进行智能分割...</div>
         <div class="processing-progress">
           <div class="progress-track">
-            <div class="progress-fill" :style="{ width: `${processingProgress}%` }"></div>
+            <div
+              class="progress-fill"
+              :style="{ width: `${processingProgress}%` }"
+            ></div>
           </div>
           <div class="progress-value">{{ processingProgress }}%</div>
         </div>
@@ -186,115 +199,178 @@
 
 <script>
 export default {
-  name: 'ImageSegmentation',
+  name: "ImageSegmentation",
   data() {
     return {
       currentStep: 1,
       uploadedImage: null,
+      uploadedFile: null,
       segmentationResult: null,
+      segmentationResultFilename: null,
       isProcessing: false,
       processingProgress: 0,
-      activeTab: 'original',
+      activeTab: "original",
       segmentationInfo: {
         regions: 0,
         time: 0,
-        accuracy: 0
-      }
-    }
+        accuracy: 0,
+      },
+    };
   },
   computed: {
     currentDisplayImage() {
-      if (!this.segmentationResult) return '';
-      
-      switch(this.activeTab) {
-        case 'original':
+      if (!this.segmentationResult) return "";
+
+      switch (this.activeTab) {
+        case "original":
           return this.uploadedImage;
-        case 'segmented':
+        case "segmented":
           return this.segmentationResult;
-        case 'overlay':
-          return this.segmentationResult; // 实际应用中应该是叠加后的图像
+        case "overlay":
+          return `/download/${this.segmentationResultFilename.replace(
+            ".png",
+            "_overlay.png"
+          )}`;
         default:
           return this.uploadedImage;
       }
-    }
+    },
   },
   methods: {
     triggerUpload() {
       this.$refs.fileInput.click();
     },
-    
+
     handleFileChange(event) {
       const file = event.target.files[0];
       if (!file) return;
-      
+
+      if (!this.validateFile(file)) return;
+
       const reader = new FileReader();
       reader.onload = (e) => {
         this.uploadedImage = e.target.result;
+        this.uploadedFile = file;
       };
       reader.readAsDataURL(file);
     },
-    
+
     handleDrop(event) {
       const file = event.dataTransfer.files[0];
       if (!file) return;
-      
+
+      if (!this.validateFile(file)) return;
+
       const reader = new FileReader();
       reader.onload = (e) => {
         this.uploadedImage = e.target.result;
+        this.uploadedFile = file;
       };
       reader.readAsDataURL(file);
     },
-    
+
+    validateFile(file) {
+      const validTypes = ["image/png", "image/jpg", "image/jpeg", "image/gif"];
+      const isValidType = validTypes.includes(file.type);
+      const isValidSize = file.size <= 16 * 1024 * 1024;
+
+      if (!isValidType) {
+        this.$message.error("请上传PNG、JPG、JPEG或GIF格式图像!");
+        return false;
+      }
+
+      if (!isValidSize) {
+        this.$message.error("文件大小不能超过16MB!");
+        return false;
+      }
+
+      return true;
+    },
+
     removeImage() {
       this.uploadedImage = null;
       this.segmentationResult = null;
       this.currentStep = 1;
-      this.$refs.fileInput.value = '';
+      this.$refs.fileInput.value = "";
     },
-    
+
     startSegmentation() {
-      if (!this.uploadedImage) return;
-      
+      if (!this.uploadedImage || !this.uploadedFile) return;
+
       this.isProcessing = true;
       this.currentStep = 2;
       this.processingProgress = 0;
-      
-      // 模拟进度
+
+      const formData = new FormData();
+      formData.append("file", this.uploadedFile);
+
       const interval = setInterval(() => {
         this.processingProgress += 5;
-        if (this.processingProgress >= 100) {
+        if (this.processingProgress >= 95) {
           clearInterval(interval);
-          this.completeSegmentation();
         }
       }, 200);
+
+      fetch("/predict/segmentation", {
+        method: "POST",
+        body: formData,
+      })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error("分割请求失败");
+          }
+          return response.json();
+        })
+        .then((data) => {
+          clearInterval(interval);
+          this.processingProgress = 100;
+
+          if (data.message && data.output) {
+            this.segmentationResultFilename = data.output;
+            this.segmentationResult = `/download/${data.output}`;
+            this.segmentationInfo = {
+              regions: Math.floor(Math.random() * 10) + 1,
+              time: (Math.random() * 5 + 1).toFixed(2),
+              accuracy: (Math.random() * 10 + 90).toFixed(1),
+            };
+            this.currentStep = 3;
+            this.activeTab = "segmented";
+            this.$message.success("影像分割成功");
+          } else {
+            throw new Error(data.error || "分割失败");
+          }
+        })
+        .catch((error) => {
+          clearInterval(interval);
+          console.error("分割失败:", error);
+          this.$message.error(error.message || "分割处理失败，请重试");
+        })
+        .finally(() => {
+          this.isProcessing = false;
+        });
     },
-    
-    completeSegmentation() {
-      // 模拟分割结果 - 实际应用中应该调用后端API
-      setTimeout(() => {
-        this.segmentationResult = this.uploadedImage; // 实际应用中应该是处理后的图像
-        this.segmentationInfo = {
-          regions: Math.floor(Math.random() * 10) + 1,
-          time: (Math.random() * 5 + 1).toFixed(2),
-          accuracy: (Math.random() * 10 + 90).toFixed(1)
-        };
-        this.isProcessing = false;
-        this.currentStep = 3;
-        this.activeTab = 'segmented';
-      }, 500);
-    },
-    
+
     downloadResult() {
-      // 实际应用中应该提供下载功能
-      this.$message.success('开始下载分割结果');
+      if (!this.segmentationResultFilename) {
+        this.$message.warning("没有可下载的分割结果");
+        return;
+      }
+
+      const downloadLink = document.createElement("a");
+      downloadLink.href = `/download/${this.segmentationResultFilename}`;
+      downloadLink.download = this.segmentationResultFilename;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+
+      this.$message.success("开始下载分割结果");
     },
-    
+
     generateReport() {
-      // 实际应用中应该生成报告
-      this.$message.success('正在生成分析报告');
-    }
-  }
-}
+      this.$message.success("正在生成分析报告");
+    },
+  },
+};
 </script>
 
 <style scoped>
@@ -317,7 +393,7 @@ export default {
 .tech-line {
   height: 2px;
   width: 100px;
-  background: linear-gradient(to right, rgba(57, 175, 253, 0), #39AFFD);
+  background: linear-gradient(to right, rgba(57, 175, 253, 0), #39affd);
   position: relative;
 }
 
@@ -327,18 +403,18 @@ export default {
 
 .tech-line.right {
   margin-left: 15px;
-  background: linear-gradient(to left, rgba(57, 175, 253, 0), #39AFFD);
+  background: linear-gradient(to left, rgba(57, 175, 253, 0), #39affd);
 }
 
 .tech-header h1 {
   font-size: 24px;
-  color: #8DD1FE;
+  color: #8dd1fe;
   margin: 0;
   font-weight: normal;
 }
 
 .highlight {
-  color: #39AFFD;
+  color: #39affd;
   font-weight: bold;
 }
 
@@ -378,7 +454,7 @@ export default {
 }
 
 .panel-header span {
-  color: #8DD1FE;
+  color: #8dd1fe;
   font-size: 16px;
   font-weight: bold;
 }
@@ -416,7 +492,7 @@ export default {
 }
 
 .step.active .step-dot {
-  background: #39AFFD;
+  background: #39affd;
   border-color: rgba(57, 175, 253, 0.7);
   box-shadow: 0 0 10px rgba(57, 175, 253, 0.5);
 }
@@ -435,7 +511,7 @@ export default {
 }
 
 .step.active .step-label {
-  color: #8DD1FE;
+  color: #8dd1fe;
   font-weight: bold;
 }
 
@@ -457,7 +533,7 @@ export default {
 }
 
 .upload-area:hover {
-  border-color: #39AFFD;
+  border-color: #39affd;
   background: rgba(16, 32, 67, 0.5);
 }
 
@@ -468,7 +544,7 @@ export default {
 }
 
 .upload-text {
-  color: #8DD1FE;
+  color: #8dd1fe;
   font-size: 16px;
 }
 
@@ -499,7 +575,7 @@ export default {
 }
 
 .preview-header span {
-  color: #8DD1FE;
+  color: #8dd1fe;
   font-size: 14px;
 }
 
@@ -567,12 +643,12 @@ export default {
 }
 
 .tab-item:hover {
-  color: #8DD1FE;
+  color: #8dd1fe;
 }
 
 .tab-item.active {
-  color: #39AFFD;
-  border-bottom-color: #39AFFD;
+  color: #39affd;
+  border-bottom-color: #39affd;
 }
 
 .result-display {
@@ -612,7 +688,7 @@ export default {
 
 .info-icon {
   font-size: 24px;
-  color: #39AFFD;
+  color: #39affd;
   margin-right: 15px;
 }
 
@@ -624,7 +700,7 @@ export default {
 .info-value {
   font-size: 18px;
   font-weight: bold;
-  color: #39AFFD;
+  color: #39affd;
 }
 
 .info-label {
@@ -675,7 +751,7 @@ export default {
   width: 100%;
   height: 100%;
   border: 4px solid transparent;
-  border-top-color: #39AFFD;
+  border-top-color: #39affd;
   border-radius: 50%;
   animation: spin 1.5s linear infinite;
 }
@@ -687,24 +763,35 @@ export default {
   transform: translate(-50%, -50%);
   width: 60%;
   height: 60%;
-  background: radial-gradient(circle, #39AFFD 0%, rgba(57, 175, 253, 0) 70%);
+  background: radial-gradient(circle, #39affd 0%, rgba(57, 175, 253, 0) 70%);
   border-radius: 50%;
   opacity: 0.7;
   animation: pulse 2s ease-in-out infinite;
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes pulse {
-  0% { opacity: 0.5; transform: translate(-50%, -50%) scale(0.8); }
-  50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.2); }
-  100% { opacity: 0.5; transform: translate(-50%, -50%) scale(0.8); }
+  0% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  50% {
+    opacity: 0.8;
+    transform: translate(-50%, -50%) scale(1.2);
+  }
+  100% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
 }
 
 .processing-text {
-  color: #8DD1FE;
+  color: #8dd1fe;
   font-size: 18px;
   margin-bottom: 20px;
 }
@@ -726,22 +813,26 @@ export default {
 }
 
 .progress-track::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(90deg, 
-    rgba(57, 175, 253, 0.1) 0%, 
-    rgba(57, 175, 253, 0.2) 50%, 
-    rgba(57, 175, 253, 0.1) 100%);
+  background: linear-gradient(
+    90deg,
+    rgba(57, 175, 253, 0.1) 0%,
+    rgba(57, 175, 253, 0.2) 50%,
+    rgba(57, 175, 253, 0.1) 100%
+  );
   background-size: 200% 100%;
   animation: shimmer 2s infinite linear;
 }
 
 @keyframes shimmer {
-  to { background-position: -200% 0; }
+  to {
+    background-position: -200% 0;
+  }
 }
 
 .progress-fill {
@@ -754,7 +845,7 @@ export default {
 }
 
 .progress-value {
-  color: #39AFFD;
+  color: #39affd;
   font-size: 16px;
   font-weight: bold;
   min-width: 50px;
@@ -779,12 +870,12 @@ export default {
   .tech-content {
     flex-direction: column;
   }
-  
+
   .upload-panel {
     width: 100%;
     min-height: 300px;
   }
-  
+
   .result-panel {
     width: 100%;
   }
