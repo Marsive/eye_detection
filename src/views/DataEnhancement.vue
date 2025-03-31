@@ -3,6 +3,7 @@
     <div class="module-title">图像数据增强</div>
 
     <div class="content-wrapper">
+      <!-- 左侧面板：增强选项 + 上传区域 -->
       <div class="left-panel">
         <div class="section-title">数据增强选项</div>
         <div class="enhancement-options">
@@ -36,11 +37,17 @@
               <i class="el-icon-upload"></i>
               <div class="upload-text">点击上传图像</div>
             </div>
-            <img v-else :src="originalImage" class="preview-image" />
+            <div v-else class="preview-container">
+              <img :src="originalImage" class="preview-image" />
+              <div class="delete-button" @click.stop="removeUploadedImage">
+                <i class="el-icon-delete"></i>
+              </div>
+            </div>
           </el-upload>
         </div>
       </div>
 
+      <!-- 右侧面板：原始图像显示 + 执行增强按钮 + 增强结果 -->
       <div class="right-panel">
         <div class="section-title">原始图像</div>
         <div class="image-display">
@@ -48,6 +55,7 @@
             <i class="el-icon-picture-outline"></i>
             <p>请先上传图像</p>
           </div>
+          <!-- 这里显示"originalImage"，注意：实际上是后端返回的增强图片，而非本地原图 -->
           <img v-else :src="originalImage" class="display-image" />
         </div>
 
@@ -102,32 +110,33 @@ export default {
     return {
       processing: false,
       selectedAugmentations: [],
-      originalImage: "",
-      originalImageFile: null, // 保存原始图像文件对象
-      originalImageUrl: "", // 添加明确的originalImageUrl属性
-      augmentedImages: [],
+      originalImage: "", // 用来显示服务器返回后的"图像路径"，目前相当于后端的"增强图"
+      originalImageFile: null, // 记录本地上传的文件对象
+      originalImageUrl: "", // 本地预览URL
+      augmentedImages: [], // 存放所有增强后（含客户端/服务器等）的结果
       augmentations: [
         { label: "随机旋转", value: "rotate" },
         { label: "水平翻转", value: "flip" },
         { label: "低光增强", value: "contrast" },
       ],
-      uploadUrl: "/predict/lowlight", // 低光增强接口
+      // 上传地址，注意这里指向后端的"低光增强"接口
+      uploadUrl: "http://127.0.0.1:5000/predict/lowlight",
     };
   },
   methods: {
     toggleAugmentation(value) {
-      if (this.selectedAugmentations.includes(value)) {
-        this.selectedAugmentations = this.selectedAugmentations.filter(
-          (item) => item !== value
-        );
+      const index = this.selectedAugmentations.indexOf(value);
+      if (index > -1) {
+        this.selectedAugmentations.splice(index, 1);
       } else {
         this.selectedAugmentations.push(value);
       }
     },
+
+    // 上传前的检查，同时可以在这里记录本地 File 对象
     beforeUpload(file) {
       const isImage = file.type.startsWith("image/");
       const isLt5M = file.size / 1024 / 1024 < 5;
-
       if (!isImage) {
         this.$message.error("只能上传图片文件!");
         return false;
@@ -136,55 +145,54 @@ export default {
         this.$message.error("图片大小不能超过 5MB!");
         return false;
       }
+
+      // 记录下文件对象，用于后续客户端旋转/翻转处理
+      this.originalImageFile = file;
+      // 本地预览URL（如果想在上传前就预览"原图"，可以直接用这个）
+      this.originalImageUrl = URL.createObjectURL(file);
+
       return true;
     },
+
+    // 上传成功后回调
     handleUploadSuccess(response) {
       if (response && response.outputs && response.outputs.length > 0) {
-        // 保存原始图像路径
-        this.originalImage = `/download/${response.outputs[0]}`;
+        // 这里 outputs[0] 是后端增强处理完成后返回的文件名
+        // 如果要访问后端文件，需要带完整URL，否则会在当前前端端口下访问不到
+        this.originalImage = `http://127.0.0.1:5000/download/${response.outputs[0]}`;
 
-        // 获取原始图像文件（用于前端处理）
+        // 如果还有 uploadFiles 列表，可再次取它做本地处理
         if (this.$refs.upload.uploadFiles.length > 0) {
           this.originalImageFile = this.$refs.upload.uploadFiles[0].raw;
-          // 创建一个临时的URL以供前端增强功能使用
           this.originalImageUrl = URL.createObjectURL(this.originalImageFile);
         }
 
-        this.augmentedImages = []; // 清空之前的增强结果
-        this.$message.success("图像上传成功");
+        // 清空之前的"增强结果"列表
+        this.augmentedImages = [];
+        this.$message.success("图像上传成功并完成服务器增强");
       } else {
         this.$message.error(response.message || "上传失败");
       }
     },
+
+    // 上传出错回调
     handleUploadError(error) {
       console.error("上传错误:", error);
       this.$message.error("图像上传失败，请重试");
     },
-    handleFileChange(file) {
-      if (!file) return;
 
-      // 验证已在beforeUpload中完成
-      this.originalImageFile = file.raw;
-
-      // 创建预览URL
-      this.originalImageUrl = URL.createObjectURL(file.raw);
-      this.originalImage = this.originalImageUrl;
-
-      this.augmentedImages = []; // 清空之前的增强结果
-      this.$message.success("图像已选择");
-    },
+    // 点击执行数据增强按钮
     async applyAugmentation() {
-      if (!this.originalImage || this.selectedAugmentations.length === 0)
-        return;
-
+      if (!this.originalImage || this.selectedAugmentations.length === 0) return;
       try {
         this.processing = true;
+        // 每次点击处理时先清空之前的增强结果
         this.augmentedImages = [];
 
-        // 前端实现的增强操作
+        // 先执行前端的旋转、翻转处理
         await this.processClientSideAugmentations();
 
-        // 如果选择了低光增强，调用后端API
+        // 如果选择了"低光增强"，再执行服务器端处理
         if (this.selectedAugmentations.includes("contrast")) {
           await this.processServerSideAugmentations();
         }
@@ -198,26 +206,16 @@ export default {
       }
     },
 
-    // 前端实现的图像增强
+    // 前端处理（旋转 + 翻转）
     async processClientSideAugmentations() {
       if (!this.originalImageFile) return;
 
       return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
-          // 创建画布
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
-
-          // 设置画布大小与图像一致
-          canvas.width = img.width;
-          canvas.height = img.height;
-
-          // 随机旋转
           if (this.selectedAugmentations.includes("rotate")) {
             const rotatedCanvas = this.rotateImage(img);
             const rotatedDataUrl = rotatedCanvas.toDataURL("image/jpeg");
-
             this.augmentedImages.push({
               url: rotatedDataUrl,
               label: "随机旋转",
@@ -225,11 +223,9 @@ export default {
             });
           }
 
-          // 水平翻转
           if (this.selectedAugmentations.includes("flip")) {
             const flippedCanvas = this.flipImage(img);
             const flippedDataUrl = flippedCanvas.toDataURL("image/jpeg");
-
             this.augmentedImages.push({
               url: flippedDataUrl,
               label: "水平翻转",
@@ -239,131 +235,102 @@ export default {
 
           resolve();
         };
-
-        // 设置图像源
+        // 这里使用"本地预览地址"作为图像源
         img.src = this.originalImageUrl || this.originalImage;
       });
     },
 
-    // 随机旋转图像
+    // 随机旋转
     rotateImage(img) {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
-
-      // 随机角度 (0-360度)
-      const angle = Math.floor(Math.random() * 360);
-
-      // 计算旋转后的画布尺寸
+      // 这里随便转个随机角度
+      const angle = Math.random() * 360;
       const radians = (angle * Math.PI) / 180;
       const sin = Math.abs(Math.sin(radians));
       const cos = Math.abs(Math.cos(radians));
-      const newWidth = Math.floor(img.width * cos + img.height * sin);
-      const newHeight = Math.floor(img.width * sin + img.height * cos);
 
-      canvas.width = newWidth;
-      canvas.height = newHeight;
+      // 计算旋转后画布需要多大尺寸
+      canvas.width = Math.floor(img.width * cos + img.height * sin);
+      canvas.height = Math.floor(img.width * sin + img.height * cos);
 
-      // 将原点移到画布中心
-      ctx.translate(newWidth / 2, newHeight / 2);
-      // 旋转画布
+      // 画布中心旋转
+      ctx.translate(canvas.width / 2, canvas.height / 2);
       ctx.rotate(radians);
-      // 绘制图像，并移回原点
-      ctx.drawImage(
-        img,
-        -img.width / 2,
-        -img.height / 2,
-        img.width,
-        img.height
-      );
-
+      // 绘制原图
+      ctx.drawImage(img, -img.width / 2, -img.height / 2);
       return canvas;
     },
 
-    // 水平翻转图像
+    // 水平翻转
     flipImage(img) {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
-
       canvas.width = img.width;
       canvas.height = img.height;
-
       // 水平翻转
       ctx.translate(img.width, 0);
       ctx.scale(-1, 1);
-      ctx.drawImage(img, 0, 0, img.width, img.height);
-
+      ctx.drawImage(img, 0, 0);
       return canvas;
     },
 
-    // 后端低光增强处理
+    // 服务器再做一次"低光增强"
     async processServerSideAugmentations() {
-      if (!this.selectedAugmentations.includes("contrast")) return;
-
-      // 只有在选择了低光增强时才调用API
+      // 这里需要把"原图文件"再发给后端
+      if (!this.originalImageFile) return;
       const formData = new FormData();
       formData.append("file", this.originalImageFile);
 
-      const response = await fetch("/predict/lowlight", {
-        method: "POST",
-        body: formData,
-      });
+      // 使用和上传相同的后端URL也可以，或者你也可以单独定义
+      const response = await axios.post(this.uploadUrl, formData);
 
-      if (!response.ok) {
-        throw new Error("低光增强请求失败");
-      }
-
-      const result = await response.json();
-
-      if (result && result.outputs && result.outputs.length > 0) {
-        // 添加低光增强结果（通常是第一张图）
+      if (response.data && response.data.outputs.length > 0) {
+        // 这里返回的是新的增强后文件
+        const serverImgUrl = `http://127.0.0.1:5000/download/${response.data.outputs[0]}`;
         this.augmentedImages.push({
-          url: `/download/${result.outputs[0]}`,
+          url: serverImgUrl,
           label: "低光增强",
-          downloadUrl: `/download/${result.outputs[0]}`,
+          downloadUrl: serverImgUrl,
         });
+      } else {
+        throw new Error(response.data.message || "低光增强请求失败");
       }
     },
 
-    // 下载增强后的图像
+    // 下载所有增强图
     async downloadAugmentedImages() {
-      if (!this.augmentedImages || this.augmentedImages.length === 0) return;
-
-      try {
-        for (let i = 0; i < this.augmentedImages.length; i++) {
-          const image = this.augmentedImages[i];
-
-          // 如果是数据URL，直接下载
-          if (image.url.startsWith("data:")) {
-            const a = document.createElement("a");
-            a.href = image.url;
-            a.download = `enhanced_${image.label}.jpg`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-          }
-          // 如果是服务器路径，使用fetch下载
-          else {
-            const response = await fetch(image.url);
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `enhanced_${image.label}.jpg`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-          }
-
-          // 每次下载间隔500ms，避免浏览器阻止多次下载
-          if (i < this.augmentedImages.length - 1) {
-            await new Promise((resolve) => setTimeout(resolve, 500));
-          }
-        }
-      } catch (error) {
-        console.error("下载错误:", error);
-        this.$message.error("下载失败，请重试");
+      for (const image of this.augmentedImages) {
+        const a = document.createElement("a");
+        a.href = image.url;
+        a.download = `enhanced_${image.label}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        // 下载间隔，防止同时触发下载事件冲突
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
+    },
+
+    // 添加删除上传图片的方法
+    removeUploadedImage(e) {
+      // 阻止事件冒泡，避免触发上传
+      if (e) {
+        e.stopPropagation();
+      }
+
+      // 清空所有图像相关数据
+      this.originalImage = "";
+      this.originalImageFile = null;
+      this.originalImageUrl = "";
+      this.augmentedImages = [];
+      
+      // 重置上传组件
+      if (this.$refs.upload) {
+        this.$refs.upload.clearFiles();
+      }
+      
+      this.$message.success("图像已删除");
     },
   },
 };
@@ -440,10 +407,45 @@ export default {
   color: #8dd1fe;
 }
 
+.preview-container {
+  position: relative;
+  width: 100%;
+  height: 150px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
 .preview-image {
   width: 100%;
   max-height: 150px;
   object-fit: contain;
+}
+
+.delete-button {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 30px;
+  height: 30px;
+  background: rgba(255, 107, 107, 0.8);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 10;
+}
+
+.delete-button:hover {
+  background: rgba(255, 107, 107, 1);
+  transform: scale(1.1);
+}
+
+.delete-button i {
+  color: white;
+  font-size: 16px;
 }
 
 .image-display {
@@ -456,7 +458,7 @@ export default {
   justify-content: center;
   position: relative;
   overflow: auto;
-  background-color: #000; /* 黑色背景更适合医学图像显示 */
+  background-color: #000; /* 医学图像用黑底可能更友好 */
 }
 
 .empty-state {
@@ -511,30 +513,18 @@ export default {
 }
 
 /* 修改后的颜色方案 */
-/* 1. 增强选项按钮 */
 ::v-deep .el-button {
-  background: rgba(42, 128, 255, 0.9) !important; /* 亮蓝色 */
+  background: rgba(42, 128, 255, 0.9) !important; /* 亮蓝 */
   border-color: #6ad4ff !important;
   color: white !important;
 }
 
-/* 2. 激活状态按钮 */
 ::v-deep .el-button.active-button {
-  background: linear-gradient(
-    45deg,
-    #6ad4ff,
-    #42a5ff
-  ) !important; /* 亮蓝渐变 */
-}
-
-/* 3. 上传区域背景 */
-.upload-area ::v-deep .el-upload {
-  display: block;
-  width: 100%;
+  background: linear-gradient(45deg, #6ad4ff, #42a5ff) !important; /* 渐变 */
 }
 
 .upload-area ::v-deep .el-upload-dragger {
-  background: rgba(16, 62, 127, 0.8) !important; /* 更亮的深蓝 */
+  background: rgba(16, 62, 127, 0.8) !important; /* 深蓝 */
   border-color: #42a5ff !important;
   width: 100%;
 }

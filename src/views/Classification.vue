@@ -172,12 +172,16 @@
 </template>
 
 <script>
+import * as echarts from 'echarts';
+
 export default {
   name: "Classification",
   data() {
     return {
       leftImage: null,
       rightImage: null,
+      leftFile: null,
+      rightFile: null,
       leftProgress: 0,
       rightProgress: 0,
       isProcessing: false,
@@ -210,68 +214,147 @@ export default {
     },
 
     simulateUpload(file, side) {
-      // 模拟上传进度
+      // 验证文件
+      if (!this.validateFile(file)) return;
+      
+      this[side + 'File'] = file; // 保存文件对象以便后续上传
+      
+      // 生成预览
       const reader = new FileReader();
-
       reader.onload = (e) => {
-        this[side + "Image"] = e.target.result;
-        this[side + "Progress"] = 100;
+        this[side + 'Image'] = e.target.result;
+        this[side + 'Progress'] = 100;
       };
-
+      
       reader.onprogress = (e) => {
         if (e.lengthComputable) {
-          this[side + "Progress"] = Math.round((e.loaded / e.total) * 100);
+          this[side + 'Progress'] = Math.round((e.loaded / e.total) * 100);
         }
       };
-
+      
       reader.readAsDataURL(file);
     },
 
-    startAnalysis() {
-      this.isProcessing = true;
-      this.processingProgress = 0;
-
-      // 模拟分析过程
-      const interval = setInterval(() => {
-        this.processingProgress += 5;
-
-        if (this.processingProgress >= 100) {
-          clearInterval(interval);
-          this.isProcessing = false;
-          this.showResults();
-        }
-      }, 200);
+    validateFile(file) {
+      const validTypes = ['image/png', 'image/jpg', 'image/jpeg', 'image/gif'];
+      const isValidType = validTypes.includes(file.type);
+      const isValidSize = file.size <= 16 * 1024 * 1024; // 16MB
+      
+      if (!isValidType) {
+        this.$message.error('请上传PNG、JPG、JPEG或GIF格式图像!');
+        return false;
+      }
+      
+      if (!isValidSize) {
+        this.$message.error('图像大小不能超过16MB!');
+        return false;
+      }
+      
+      return true;
     },
 
-    showResults() {
-      // 模拟分析结果
-      this.analysisResult = [
-        {
-          abnormal: true,
-          conclusion: "检测到糖尿病视网膜病变",
-          items: [
-            { name: "视网膜出血", value: "已检测到", abnormal: true },
-            { name: "硬性渗出", value: "已检测到", abnormal: true },
-            { name: "棉絮斑", value: "未检测到", abnormal: false },
-            { name: "视网膜微血管瘤", value: "已检测到", abnormal: true },
-            { name: "新生血管", value: "未检测到", abnormal: false },
-          ],
-        },
-      ];
-
-      if (this.rightImage) {
-        this.analysisResult.push({
-          abnormal: false,
-          conclusion: "未检测到明显异常",
-          items: [
-            { name: "视网膜出血", value: "未检测到", abnormal: false },
-            { name: "硬性渗出", value: "未检测到", abnormal: false },
-            { name: "棉絮斑", value: "未检测到", abnormal: false },
-            { name: "视网膜微血管瘤", value: "未检测到", abnormal: false },
-            { name: "新生血管", value: "未检测到", abnormal: false },
-          ],
-        });
+    startAnalysis() {
+      if (!this.canAnalyze) return;
+      
+      this.isProcessing = true;
+      this.processingProgress = 0;
+      this.analysisResult = null;
+      
+      // 准备FormData
+      const formData = new FormData();
+      
+      // 添加左右眼图像（如果有）
+      if (this.leftFile) {
+        formData.append('file', this.leftFile);
       }
+      if (this.rightFile) {
+        formData.append('file', this.rightFile);
+      }
+      
+      // 设置阈值策略
+      formData.append('threshold_strategy', 'per_class');
+      
+      // 模拟进度条
+      const interval = setInterval(() => {
+        this.processingProgress += 5;
+        if (this.processingProgress >= 95) {
+          clearInterval(interval);
+        }
+      }, 200);
+      
+      // 调用API
+      fetch('/predict/class', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('分类请求失败');
+        }
+        return response.json();
+      })
+      .then(data => {
+        clearInterval(interval);
+        this.processingProgress = 100;
+        
+        // 处理API返回的结果
+        if (data.message === "Classification completed" && data.results && data.results.length > 0) {
+          this.processClassificationResults(data.results);
+        } else {
+          throw new Error(data.error || '分类失败');
+        }
+      })
+      .catch(error => {
+        clearInterval(interval);
+        console.error('分类错误:', error);
+        this.$message.error(error.message || '分类处理失败，请重试');
+      })
+      .finally(() => {
+        setTimeout(() => {
+          this.isProcessing = false;
+        }, 500);
+      });
+    },
+
+    processClassificationResults(results) {
+      const class_names = [
+        "AMD年龄相关性黄斑变性", 
+        "Cataract白内障", 
+        "Diabetes糖尿病视网膜病变", 
+        "Glaucoma青光眼", 
+        "Hypertension高血压视网膜病变", 
+        "Myopia近视", 
+        "Normal正常", 
+        "Other其他"
+      ];
+      
+      // 处理每个图像的结果
+      this.analysisResult = results.map((result, idx) => {
+        // 准备概率数据供柱状图使用
+        const chartData = class_names.map((name, index) => ({
+          name: name,
+          value: (result.all_probs[index] * 100).toFixed(1),
+          color: this.getBarColor(result.predicted_classes.includes(name.split('')[0]))
+        }));
+        
+        // 获取预测的类别并去除"Normal"
+        const abnormalClasses = result.predicted_classes.filter(cls => cls !== 'Normal');
+        
+        return {
+          side: idx === 0 ? 'left' : 'right',
+          abnormal: abnormalClasses.length > 0,
+          conclusion: abnormalClasses.length > 0 
+            ? `检测到异常: ${abnormalClasses.join(', ')}` 
+            : "未检测到明显异常",
+          chartData: chartData,
+          predictedClasses: result.predicted_classes,
+          confidence: (result.confidence * 100).toFixed(1)
+        };
+      });
+    },
+
+    getBarColor(isPredicted) {
+      return isPredicted ? '#ff6b6b' : '#39affd';
     },
 
     removeImage(side) {
@@ -282,6 +365,129 @@ export default {
         this.$refs[side + "FileInput"].value = "";
       }
     },
+
+    // 在mounted和updated生命周期中初始化图表
+    mounted() {
+      this.$nextTick(() => {
+        this.initCharts();
+      });
+    },
+
+    updated() {
+      this.$nextTick(() => {
+        this.initCharts();
+      });
+    },
+
+    // 初始化所有图表
+    initCharts() {
+      if (!this.analysisResult) return;
+      
+      this.analysisResult.forEach(result => {
+        const chartId = `chart-${result.side}`;
+        const chartDom = document.getElementById(chartId);
+        
+        if (!chartDom) return;
+        
+        // 检查是否已经存在chart实例，如果存在则销毁
+        const existingChart = echarts.getInstanceByDom(chartDom);
+        if (existingChart) {
+          existingChart.dispose();
+        }
+        
+        const myChart = echarts.init(chartDom);
+        
+        // 图表配置
+        const option = {
+          tooltip: {
+            trigger: 'axis',
+            axisPointer: {
+              type: 'shadow'
+            },
+            formatter: '{b}: {c}%'
+          },
+          grid: {
+            left: '3%',
+            right: '4%',
+            bottom: '8%',
+            top: '3%',
+            containLabel: true
+          },
+          xAxis: {
+            type: 'category',
+            data: result.chartData.map(item => {
+              // 处理较长的名称，添加换行
+              const name = item.name;
+              return name.length > 10 ? name.substring(0, 10) + '\n' + name.substring(10) : name;
+            }),
+            axisLabel: {
+              interval: 0,
+              rotate: 30,
+              color: '#8dd1fe',
+              fontSize: 10
+            },
+            axisTick: {
+              alignWithLabel: true,
+              lineStyle: {
+                color: '#8dd1fe'
+              }
+            },
+            axisLine: {
+              lineStyle: {
+                color: '#8dd1fe'
+              }
+            }
+          },
+          yAxis: {
+            type: 'value',
+            name: '概率 (%)',
+            nameTextStyle: {
+              color: '#8dd1fe'
+            },
+            axisLabel: {
+              color: '#8dd1fe',
+              formatter: '{value}%'
+            },
+            axisLine: {
+              lineStyle: {
+                color: '#8dd1fe'
+              }
+            },
+            splitLine: {
+              lineStyle: {
+                color: 'rgba(57, 175, 253, 0.2)'
+              }
+            }
+          },
+          series: [
+            {
+              name: '疾病概率',
+              type: 'bar',
+              barWidth: '60%',
+              data: result.chartData.map(item => ({
+                value: item.value,
+                itemStyle: {
+                  color: item.color
+                }
+              })),
+              label: {
+                show: true,
+                position: 'top',
+                formatter: '{c}%',
+                color: '#8dd1fe'
+              }
+            }
+          ]
+        };
+        
+        myChart.setOption(option);
+        
+        // 响应窗口大小变化
+        window.addEventListener('resize', () => {
+          myChart.resize();
+        });
+      });
+    }
   },
 };
 </script>
