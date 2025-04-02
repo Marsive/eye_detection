@@ -227,7 +227,7 @@ export default {
         case "segmented":
           return this.segmentationResult;
         case "overlay":
-          return `/download/${this.segmentationResultFilename.replace(
+          return `http://127.0.0.1:5000/download/${this.segmentationResultFilename.replace(
             ".png",
             "_overlay.png"
           )}`;
@@ -311,7 +311,7 @@ export default {
         }
       }, 200);
 
-      fetch("/predict/segmentation", {
+      fetch("http://127.0.0.1:5000/predict/segmentation", {
         method: "POST",
         body: formData,
       })
@@ -357,7 +357,7 @@ export default {
       }
 
       const downloadLink = document.createElement("a");
-      downloadLink.href = `/download/${this.segmentationResultFilename}`;
+      downloadLink.href = `http://127.0.0.1:5000/download/${this.segmentationResultFilename}`;
       downloadLink.download = this.segmentationResultFilename;
       document.body.appendChild(downloadLink);
       downloadLink.click();

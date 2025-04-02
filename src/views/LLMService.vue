@@ -323,7 +323,7 @@ export default {
           formData.append("file", tempFile);
         }
 
-        const response = await fetch("/predict/analysis", {
+        const response = await fetch("http://127.0.0.1:5000/predict/analysis", {
           method: "POST",
           body: formData,
         });
@@ -341,7 +341,7 @@ export default {
 
           if (data.processed_file) {
             aiMessage.hasImage = true;
-            aiMessage.imageUrl = `/download/${data.processed_file}`;
+            aiMessage.imageUrl = `http://127.0.0.1:5000/download/${data.processed_file}`;
           }
 
           this.addMessage(aiMessage);
