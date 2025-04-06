@@ -76,9 +76,9 @@
                   <span class="dot"></span>
                   <span class="dot"></span>
                 </div>
-                <div v-if="message.hasImage" class="message-image">
+                <!-- <div v-if="message.hasImage" class="message-image">
                   <img :src="message.imageUrl" alt="图像" />
-                </div>
+                </div> -->
                 <div class="message-time">{{ message.timestamp }}</div>
               </div>
             </div>

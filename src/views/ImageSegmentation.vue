@@ -118,7 +118,7 @@
 
               <div
                 class="tab-item"
-                :class="{ active: activeTab === 'segmented' }"
+                :class="{ active: activeTab === 'superposed' }"
                 @click="activeTab = 'superposed'"
               >
                 分割结果
@@ -192,6 +192,7 @@ export default {
       uploadedFile: null,
       segmentationResult: null,
       segmentationResultFilename: null,
+      segmentationOverlayFilename: null,
       isProcessing: false,
       processingProgress: 0,
       activeTab: "original",
@@ -208,6 +209,8 @@ export default {
         case "original":
           return this.uploadedImage;
         case "segmented":
+          return `http://127.0.0.1:5000/download/${this.segmentationOverlayFilename}`;
+        case "superposed":
           return `http://127.0.0.1:5000/download/${this.segmentationResultFilename}`;
         default:
           return this.uploadedImage;
@@ -267,7 +270,10 @@ export default {
 
     removeImage() {
       this.uploadedImage = null;
+      this.uploadedFile = null;
       this.segmentationResult = null;
+      this.segmentationResultFilename = null;
+      this.segmentationOverlayFilename = null;
       this.currentStep = 1;
       this.$refs.fileInput.value = "";
     },
@@ -305,7 +311,8 @@ export default {
 
           if (data.message && data.output) {
             this.segmentationResultFilename = data.output;
-            this.segmentationResult = true; // 仅标记有结果
+            this.segmentationOverlayFilename = data.overlay || data.output;
+            this.segmentationResult = true;
             this.segmentationInfo = {
               time: (Math.random() * 5 + 1).toFixed(2),
             };
@@ -327,14 +334,35 @@ export default {
     },
 
     downloadResult() {
-      if (!this.segmentationResultFilename) {
+      if (!this.segmentationResult) {
         this.$message.warning("没有可下载的分割结果");
         return;
       }
 
+      let downloadFilename;
+      let downloadUrl;
+
+      // 根据当前活动的标签页决定下载哪个文件
+      switch (this.activeTab) {
+        case "original":
+          this.$message.warning("请先切换到分割结果或叠加显示标签页");
+          return;
+        case "segmented":
+          downloadFilename = this.segmentationOverlayFilename;
+          downloadUrl = `http://127.0.0.1:5000/download/${this.segmentationOverlayFilename}`;
+          break;
+        case "superposed":
+          downloadFilename = this.segmentationResultFilename;
+          downloadUrl = `http://127.0.0.1:5000/download/${this.segmentationResultFilename}`;
+          break;
+        default:
+          this.$message.warning("无法确定下载内容");
+          return;
+      }
+
       const downloadLink = document.createElement("a");
-      downloadLink.href = `http://127.0.0.1:5000/download/${this.segmentationResultFilename}`;
-      downloadLink.download = this.segmentationResultFilename;
+      downloadLink.href = downloadUrl;
+      downloadLink.download = downloadFilename;
       document.body.appendChild(downloadLink);
       downloadLink.click();
       document.body.removeChild(downloadLink);
@@ -343,6 +371,10 @@ export default {
     },
 
     generateReport() {
+      if (!this.segmentationResult) {
+        this.$message.warning("请先完成图像分割");
+        return;
+      }
       this.$message.success("正在生成分析报告");
     },
   },

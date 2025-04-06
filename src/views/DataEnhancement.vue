@@ -54,7 +54,11 @@
             <p>增强结果将显示在这里</p>
           </div>
           <div v-else class="enhanced-images-container">
-            <div v-for="(image, index) in enhancedImages" :key="index" class="enhanced-image-item">
+            <div
+              v-for="(image, index) in enhancedImages"
+              :key="index"
+              class="enhanced-image-item"
+            >
               <img :src="image.url" class="display-image" />
               <div class="image-label">增强图像 {{ index + 1 }}</div>
             </div>
@@ -85,55 +89,64 @@
     </div>
 
     <!-- 画布编辑器弹窗 -->
-    <div class="canvas-editor-overlay" v-if="showEditor" @click.self="closeCanvasEditor">
+    <div
+      class="canvas-editor-overlay"
+      v-if="showEditor"
+      @click.self="closeCanvasEditor"
+    >
       <div class="canvas-editor-container">
         <div class="editor-header">
           <div class="editor-title">图像编辑</div>
           <div class="editor-tools">
             <el-button-group>
-              <el-button 
-                type="primary" 
-                size="small" 
-                :class="{ 'active-tool': currentTool === 'rotate' }" 
+              <el-button
+                type="primary"
+                size="small"
+                :class="{ 'active-tool': currentTool === 'rotate' }"
                 @click="setTool('rotate')"
               >
                 <i class="el-icon-refresh-right"></i> 随机旋转
               </el-button>
-              <el-button 
-                type="primary" 
-                size="small" 
-                :class="{ 'active-tool': currentTool === 'flip' }" 
+              <el-button
+                type="primary"
+                size="small"
+                :class="{ 'active-tool': currentTool === 'flip' }"
                 @click="setTool('flip')"
               >
                 <i class="el-icon-sort"></i> 水平翻转
               </el-button>
-              <el-button 
-                type="primary" 
-                size="small" 
-                :class="{ 'active-tool': currentTool === 'brush' }" 
+              <el-button
+                type="primary"
+                size="small"
+                :class="{ 'active-tool': currentTool === 'brush' }"
                 @click="setTool('brush')"
               >
                 <i class="el-icon-brush"></i> 画笔
               </el-button>
-              <el-button 
-                type="primary" 
-                size="small" 
-                :class="{ 'active-tool': currentTool === 'eraser' }" 
+              <el-button
+                type="primary"
+                size="small"
+                :class="{ 'active-tool': currentTool === 'eraser' }"
                 @click="setTool('eraser')"
               >
                 <i class="el-icon-delete"></i> 橡皮擦
               </el-button>
-              <el-button 
-                type="primary" 
-                size="small" 
-                @click="undoOperation" 
+              <el-button
+                type="primary"
+                size="small"
+                @click="undoOperation"
                 :disabled="!canUndo"
               >
                 <i class="el-icon-back"></i> 撤销操作
               </el-button>
             </el-button-group>
           </div>
-          <el-button type="danger" size="small" circle @click="closeCanvasEditor">
+          <el-button
+            type="danger"
+            size="small"
+            circle
+            @click="closeCanvasEditor"
+          >
             <i class="el-icon-close"></i>
           </el-button>
         </div>
@@ -156,6 +169,7 @@ export default {
       processing: false,
       originalImageFile: null, // 记录本地上传的文件对象
       originalImageUrl: "", // 本地预览URL
+      uploadedImageUrl: "", // 添加这一行
       enhancedImages: [], // 存放增强后的结果
       // 上传地址
       uploadUrl: "http://127.0.0.1:5000/predict/lowlight",
@@ -191,27 +205,22 @@ export default {
       this.originalImageFile = file;
       // 本地预览URL
       this.originalImageUrl = URL.createObjectURL(file);
+      this.uploadedImageUrl = URL.createObjectURL(file); // 添加这一行
 
       return false; // 不自动上传
     },
 
     // 上传成功后回调
     handleUploadSuccess(response) {
+      this.processing = false;
       if (response && response.outputs && response.outputs.length > 0) {
-        this.processing = false;
-
-        // 将后端返回的所有图片添加到增强结果中
-        const enhancedImages = response.outputs.map((output, index) => ({
+        this.enhancedImages = response.outputs.map((output, index) => ({
           url: `http://127.0.0.1:5000/download/${output}`,
           label: `增强图像 ${index + 1}`,
           filename: output,
         }));
-
-        this.enhancedImages = enhancedImages;
-
         this.$message.success("低光增强完成");
       } else {
-        this.processing = false;
         this.$message.error(response.message || "增强失败");
       }
     },
@@ -265,19 +274,12 @@ export default {
 
     // 删除上传图片
     removeUploadedImage(e) {
-      if (e) {
-        e.stopPropagation();
-      }
-
-      // 清空所有图像相关数据
+      if (e) e.stopPropagation();
       this.originalImageFile = null;
       this.originalImageUrl = "";
-
-      // 重置上传组件
-      if (this.$refs.upload) {
-        this.$refs.upload.clearFiles();
-      }
-
+      this.uploadedImageUrl = ""; // 重置预览
+      this.enhancedImages = []; // 可选：清空增强结果
+      if (this.$refs.upload) this.$refs.upload.clearFiles();
       this.$message.success("图像已删除");
     },
 

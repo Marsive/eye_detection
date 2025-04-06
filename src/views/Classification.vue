@@ -33,7 +33,7 @@
             <div class="upload-icon">
               <i class="el-icon-upload"></i>
             </div>
-            <div class="upload-text">点击上传DICOM影像</div>
+            <div class="upload-text">点击上传眼底影像</div>
           </div>
 
           <div class="image-container" v-if="leftImage">
@@ -75,7 +75,7 @@
             <div class="upload-icon">
               <i class="el-icon-upload"></i>
             </div>
-            <div class="upload-text">点击上传DICOM影像</div>
+            <div class="upload-text">点击上传眼底影像</div>
           </div>
 
           <div class="image-container" v-if="rightImage">
@@ -115,74 +115,66 @@
         <div class="tech-line right"></div>
       </div>
 
-      <div class="result-layout">
-        <!-- 左侧图像区域 -->
-        <div class="result-images">
-          <div class="image-box" v-if="leftImage">
-            <div class="image-title">左眼图像</div>
-            <div class="image-display">
-              <img :src="leftImage" alt="左眼图像" />
-            </div>
-          </div>
-          <div class="image-box" v-if="rightImage">
-            <div class="image-title">右眼图像</div>
-            <div class="image-display">
-              <img :src="rightImage" alt="右眼图像" />
-            </div>
-          </div>
+      <!-- 分析结果面板 -->
+      <div
+        v-for="(result, index) in analysisResult"
+        :key="index"
+        class="result-panel"
+      >
+        <div class="panel-header">
+          {{ index === 0 ? "左眼" : "右眼" }}分析结果
         </div>
 
-        <!-- 右侧分析结果区域 -->
-        <div class="result-analysis">
-          <div
-            v-for="(result, index) in analysisResult"
-            :key="index"
-            class="analysis-panel"
-          >
-            <div class="panel-header">
-              {{ index === 0 ? "左眼" : "右眼" }}分析结果
+        <div class="panel-content">
+          <!-- 左侧图像 -->
+          <div class="result-image-container">
+            <img
+              :src="index === 0 ? leftImage : rightImage"
+              alt="眼底图像"
+              class="result-image"
+            />
+          </div>
+
+          <!-- 右侧分析数据 -->
+          <div class="result-data-container">
+            <!-- 基本分析信息 -->
+            <div class="result-metrics">
+              <div class="metric-item">
+                <div class="metric-label">预测疾病类型:</div>
+                <div class="metric-value disease-types">
+                  <el-tag
+                    v-for="(disease, i) in result.predictedClasses"
+                    :key="i"
+                    :type="getTagType(disease)"
+                    effect="dark"
+                    class="disease-tag"
+                  >
+                    {{ getChineseName(disease) }}
+                  </el-tag>
+                </div>
+              </div>
+              <div class="metric-item">
+                <div class="metric-label">置信度:</div>
+                <div class="metric-value">{{ result.confidence }}%</div>
+              </div>
             </div>
 
-            <!-- 主要分析结果显示 -->
-            <div class="analysis-content">
-              <div class="result-metrics">
-                <div class="metric-item">
-                  <div class="metric-label">预测疾病类型:</div>
-                  <div class="metric-value disease-types">
-                    <el-tag
-                      v-for="(disease, i) in result.predictedClasses"
-                      :key="i"
-                      :type="getTagType(disease)"
-                      effect="dark"
-                      class="disease-tag"
-                    >
-                      {{ disease }}
-                    </el-tag>
-                  </div>
-                </div>
-                <div class="metric-item">
-                  <div class="metric-label">置信度:</div>
-                  <div class="metric-value">{{ result.confidence }}%</div>
-                </div>
-              </div>
+            <!-- 图表区域 -->
+            <div class="chart-container">
+              <div :id="`chart-${result.side}`" class="prob-chart"></div>
+            </div>
 
-              <!-- 图表展示区域 -->
-              <div class="chart-container">
-                <div :id="`chart-${result.side}`" class="prob-chart"></div>
-              </div>
-
-              <!-- 结果结论 -->
-              <div
-                class="analysis-conclusion"
-                :class="{ abnormal: result.abnormal }"
-              >
-                <i
-                  :class="
-                    result.abnormal ? 'el-icon-warning' : 'el-icon-success'
-                  "
-                ></i>
-                <span>{{ result.conclusion }}</span>
-              </div>
+            <!-- 结果结论 -->
+            <div
+              class="analysis-conclusion"
+              :class="{ abnormal: result.abnormal }"
+            >
+              <i
+                :class="
+                  result.abnormal ? 'el-icon-warning' : 'el-icon-success'
+                "
+              ></i>
+              <span>{{ result.conclusion }}</span>
             </div>
           </div>
         </div>
@@ -227,6 +219,18 @@ export default {
       isProcessing: false,
       processingProgress: 0,
       analysisResult: null,
+      // 疾病名称映射表
+      diseaseMap: {
+        AMD: "年龄相关性黄斑变性",
+        Cataract: "白内障",
+        Diabetes: "糖尿病视网膜病变",
+        Glaucoma: "青光眼",
+        Hypertension: "高血压视网膜病变",
+        Myopia: "近视",
+        Normal: "正常",
+        Other: "其他"
+      },
+      charts: [] // 存储图表实例，用于后续管理
     };
   },
   computed: {
@@ -235,6 +239,11 @@ export default {
     },
   },
   methods: {
+    // 获取疾病的中文名称
+    getChineseName(disease) {
+      return this.diseaseMap[disease] || disease;
+    },
+    
     triggerUpload(side) {
       this.$refs[side + "FileInput"].click();
     },
@@ -299,6 +308,12 @@ export default {
       this.isProcessing = true;
       this.processingProgress = 0;
       this.analysisResult = null;
+      
+      // 清空之前的图表实例
+      this.charts.forEach(chart => {
+        chart.dispose();
+      });
+      this.charts = [];
 
       // 准备FormData
       const formData = new FormData();
@@ -344,6 +359,13 @@ export default {
             data.results.length > 0
           ) {
             this.processClassificationResults(data.results);
+            
+            // 确保DOM渲染完成后初始化图表
+            this.$nextTick(() => {
+              setTimeout(() => {
+                this.initCharts();
+              }, 100);
+            });
           } else {
             throw new Error(data.error || "分类失败");
           }
@@ -361,32 +383,27 @@ export default {
     },
 
     processClassificationResults(results) {
-      const class_names = [
-        "AMD年龄相关性黄斑变性",
-        "Cataract白内障",
-        "Diabetes糖尿病视网膜病变",
-        "Glaucoma青光眼",
-        "Hypertension高血压视网膜病变",
-        "Myopia近视",
-        "Normal正常",
-        "Other其他",
-      ];
-
       // 处理每个图像的结果
       this.analysisResult = results.map((result, idx) => {
         // 准备概率数据供柱状图使用
-        const chartData = class_names.map((name, index) => ({
-          name: name,
-          value: (result.all_probs[index] * 100).toFixed(1),
-          color: this.getBarColor(
-            result.predicted_classes.includes(name.split("")[0])
-          ),
-        }));
+        const chartData = [];
+        
+        // 疾病和概率对应关系
+        const diseaseNames = ["AMD", "Cataract", "Diabetes", "Glaucoma", "Hypertension", "Myopia", "Normal", "Other"];
+        
+        for (let i = 0; i < diseaseNames.length; i++) {
+          chartData.push({
+            name: diseaseNames[i],
+            chineseName: this.getChineseName(diseaseNames[i]),
+            value: result.all_probs[i],
+            isPredicted: result.predicted_classes.includes(diseaseNames[i])
+          });
+        }
 
         // 获取预测的类别并去除"Normal"
-        const abnormalClasses = result.predicted_classes.filter(
-          (cls) => cls !== "Normal"
-        );
+        const abnormalClasses = result.predicted_classes
+          .filter(cls => cls !== "Normal")
+          .map(cls => this.getChineseName(cls));
 
         return {
           side: idx === 0 ? "left" : "right",
@@ -415,19 +432,6 @@ export default {
       }
     },
 
-    // 在mounted和updated生命周期中初始化图表
-    mounted() {
-      this.$nextTick(() => {
-        this.initCharts();
-      });
-    },
-
-    updated() {
-      this.$nextTick(() => {
-        this.initCharts();
-      });
-    },
-
     // 初始化所有图表
     initCharts() {
       if (!this.analysisResult) return;
@@ -436,7 +440,10 @@ export default {
         const chartId = `chart-${result.side}`;
         const chartDom = document.getElementById(chartId);
 
-        if (!chartDom) return;
+        if (!chartDom) {
+          console.error(`图表容器不存在: ${chartId}`);
+          return;
+        }
 
         // 检查是否已经存在chart实例，如果存在则销毁
         const existingChart = echarts.getInstanceByDom(chartDom);
@@ -445,6 +452,16 @@ export default {
         }
 
         const myChart = echarts.init(chartDom);
+        this.charts.push(myChart); // 保存图表实例
+
+        // 准备数据
+        const xAxisData = result.chartData.map(item => item.chineseName);
+        const seriesData = result.chartData.map(item => ({
+          value: (item.value * 100).toFixed(1),
+          itemStyle: {
+            color: item.isPredicted ? '#ff6b6b' : '#39affd'
+          }
+        }));
 
         // 图表配置
         const option = {
@@ -453,7 +470,10 @@ export default {
             axisPointer: {
               type: "shadow",
             },
-            formatter: "{b}: {c}%",
+            formatter: function(params) {
+              const data = params[0];
+              return `${data.name}: ${data.value}%`;
+            }
           },
           grid: {
             left: "3%",
@@ -464,13 +484,7 @@ export default {
           },
           xAxis: {
             type: "category",
-            data: result.chartData.map((item) => {
-              // 处理较长的名称，添加换行
-              const name = item.name;
-              return name.length > 10
-                ? name.substring(0, 10) + "\n" + name.substring(10)
-                : name;
-            }),
+            data: xAxisData,
             axisLabel: {
               interval: 0,
               rotate: 30,
@@ -515,12 +529,7 @@ export default {
               name: "疾病概率",
               type: "bar",
               barWidth: "60%",
-              data: result.chartData.map((item) => ({
-                value: item.value,
-                itemStyle: {
-                  color: item.color,
-                },
-              })),
+              data: seriesData,
               label: {
                 show: true,
                 position: "top",
@@ -532,11 +541,16 @@ export default {
         };
 
         myChart.setOption(option);
+        
+        // 确保图表正常显示
+        myChart.resize();
 
         // 响应窗口大小变化
         window.addEventListener("resize", () => {
           myChart.resize();
         });
+        
+        console.log(`图表 ${chartId} 已初始化`);
       });
     },
 
@@ -554,6 +568,13 @@ export default {
       return diseaseTypes[disease] || "danger";
     },
   },
+  // 当组件销毁时清理图表实例
+  beforeDestroy() {
+    this.charts.forEach(chart => {
+      chart.dispose();
+    });
+    this.charts = [];
+  }
 };
 </script>
 
@@ -764,64 +785,14 @@ export default {
   margin: 0 15px;
 }
 
-.result-layout {
-  display: flex;
-  gap: 20px;
-  width: 100%;
-}
-
-.result-images {
-  width: 25%;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.image-box {
+/* 新的结果面板样式 */
+.result-panel {
   background: rgba(13, 28, 64, 0.5);
   border-radius: 8px;
   border: 1px solid rgba(57, 175, 253, 0.3);
   box-shadow: 0 0 15px rgba(57, 175, 253, 0.1);
   overflow: hidden;
-}
-
-.image-title {
-  background: rgba(16, 32, 67, 0.8);
-  padding: 10px 15px;
-  color: #8dd1fe;
-  font-size: 16px;
-  border-bottom: 1px solid rgba(57, 175, 253, 0.2);
-  text-align: center;
-}
-
-.image-display {
-  padding: 15px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background-color: #000;
-}
-
-.image-display img {
-  max-width: 100%;
-  max-height: 200px;
-  object-fit: contain;
-  border-radius: 4px;
-}
-
-.result-analysis {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.analysis-panel {
-  background: rgba(13, 28, 64, 0.5);
-  border-radius: 8px;
-  border: 1px solid rgba(57, 175, 253, 0.3);
-  box-shadow: 0 0 15px rgba(57, 175, 253, 0.1);
-  overflow: hidden;
+  margin-bottom: 20px;
 }
 
 .panel-header {
@@ -834,8 +805,31 @@ export default {
   text-align: center;
 }
 
-.analysis-content {
+.panel-content {
+  display: flex;
   padding: 20px;
+}
+
+.result-image-container {
+  width: 30%;
+  min-width: 250px;
+  padding-right: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.result-image {
+  max-width: 100%;
+  max-height: 300px;
+  object-fit: contain;
+  border-radius: 4px;
+  background-color: #000;
+}
+
+.result-data-container {
+  flex: 1;
+  min-width: 0; /* 避免弹性盒子溢出 */
 }
 
 .result-metrics {
@@ -876,6 +870,9 @@ export default {
 .chart-container {
   height: 300px;
   margin: 20px 0;
+  background: rgba(16, 32, 67, 0.3);
+  border-radius: 8px;
+  padding: 10px;
 }
 
 .prob-chart {
@@ -980,6 +977,42 @@ export default {
   }
 }
 
+.analysis-conclusion {
+  display: flex;
+  align-items: center;
+  background: rgba(16, 32, 67, 0.5);
+  padding: 15px;
+  border-radius: 8px;
+  margin-top: 15px;
+  color: #3dfd7d;
+  font-weight: bold;
+}
+
+.analysis-conclusion.abnormal {
+  color: #ff6b6b;
+}
+
+.analysis-conclusion i {
+  margin-right: 10px;
+  font-size: 20px;
+}
+
+/* 结果对照布局 */
+.result-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  margin-top: 20px;
+}
+
+.result-panel {
+  background: rgba(13, 28, 64, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(57, 175, 253, 0.3);
+  box-shadow: 0 0 15px rgba(57, 175, 253, 0.1);
+  overflow: hidden;
+}
+
 .processing-text {
   color: #8dd1fe;
   font-size: 18px;
@@ -1027,19 +1060,25 @@ export default {
     flex-direction: column;
   }
 
-  .result-images {
-    width: 100%;
-    flex-direction: row;
+  .panel-content {
+    flex-direction: column;
   }
 
-  .image-box {
-    flex: 1;
+  .result-image-container {
+    width: 100%;
+    padding-right: 0;
+    padding-bottom: 20px;
   }
 }
 
 @media (max-width: 768px) {
-  .result-images {
+  .disease-types {
     flex-direction: column;
+  }
+  
+  .disease-tag {
+    margin-bottom: 5px;
   }
 }
 </style>
+
