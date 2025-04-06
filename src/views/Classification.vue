@@ -115,34 +115,74 @@
         <div class="tech-line right"></div>
       </div>
 
-      <div class="result-cards">
-        <div
-          class="result-card"
-          v-for="(result, index) in analysisResult"
-          :key="index"
-        >
-          <div class="result-image">
-            <img :src="index === 0 ? leftImage : rightImage" alt="眼底图像" />
+      <div class="result-layout">
+        <!-- 左侧图像区域 -->
+        <div class="result-images">
+          <div class="image-box" v-if="leftImage">
+            <div class="image-title">左眼图像</div>
+            <div class="image-display">
+              <img :src="leftImage" alt="左眼图像" />
+            </div>
           </div>
-          <div class="result-info">
-            <div class="result-title">
+          <div class="image-box" v-if="rightImage">
+            <div class="image-title">右眼图像</div>
+            <div class="image-display">
+              <img :src="rightImage" alt="右眼图像" />
+            </div>
+          </div>
+        </div>
+
+        <!-- 右侧分析结果区域 -->
+        <div class="result-analysis">
+          <div
+            v-for="(result, index) in analysisResult"
+            :key="index"
+            class="analysis-panel"
+          >
+            <div class="panel-header">
               {{ index === 0 ? "左眼" : "右眼" }}分析结果
             </div>
-            <div class="result-item" v-for="(item, i) in result.items" :key="i">
-              <div class="item-name">{{ item.name }}:</div>
-              <div class="item-value" :class="{ abnormal: item.abnormal }">
-                {{ item.value }}
-                <i v-if="item.abnormal" class="el-icon-warning-outline"></i>
+
+            <!-- 主要分析结果显示 -->
+            <div class="analysis-content">
+              <div class="result-metrics">
+                <div class="metric-item">
+                  <div class="metric-label">预测疾病类型:</div>
+                  <div class="metric-value disease-types">
+                    <el-tag
+                      v-for="(disease, i) in result.predictedClasses"
+                      :key="i"
+                      :type="getTagType(disease)"
+                      effect="dark"
+                      class="disease-tag"
+                    >
+                      {{ disease }}
+                    </el-tag>
+                  </div>
+                </div>
+                <div class="metric-item">
+                  <div class="metric-label">置信度:</div>
+                  <div class="metric-value">{{ result.confidence }}%</div>
+                </div>
               </div>
-            </div>
-            <div
-              class="result-conclusion"
-              :class="{ abnormal: result.abnormal }"
-            >
-              <i
-                :class="result.abnormal ? 'el-icon-warning' : 'el-icon-success'"
-              ></i>
-              {{ result.conclusion }}
+
+              <!-- 图表展示区域 -->
+              <div class="chart-container">
+                <div :id="`chart-${result.side}`" class="prob-chart"></div>
+              </div>
+
+              <!-- 结果结论 -->
+              <div
+                class="analysis-conclusion"
+                :class="{ abnormal: result.abnormal }"
+              >
+                <i
+                  :class="
+                    result.abnormal ? 'el-icon-warning' : 'el-icon-success'
+                  "
+                ></i>
+                <span>{{ result.conclusion }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -172,7 +212,7 @@
 </template>
 
 <script>
-import * as echarts from 'echarts';
+import * as echarts from "echarts";
 
 export default {
   name: "Classification",
@@ -216,64 +256,64 @@ export default {
     simulateUpload(file, side) {
       // 验证文件
       if (!this.validateFile(file)) return;
-      
-      this[side + 'File'] = file; // 保存文件对象以便后续上传
-      
+
+      this[side + "File"] = file; // 保存文件对象以便后续上传
+
       // 生成预览
       const reader = new FileReader();
       reader.onload = (e) => {
-        this[side + 'Image'] = e.target.result;
-        this[side + 'Progress'] = 100;
+        this[side + "Image"] = e.target.result;
+        this[side + "Progress"] = 100;
       };
-      
+
       reader.onprogress = (e) => {
         if (e.lengthComputable) {
-          this[side + 'Progress'] = Math.round((e.loaded / e.total) * 100);
+          this[side + "Progress"] = Math.round((e.loaded / e.total) * 100);
         }
       };
-      
+
       reader.readAsDataURL(file);
     },
 
     validateFile(file) {
-      const validTypes = ['image/png', 'image/jpg', 'image/jpeg', 'image/gif'];
+      const validTypes = ["image/png", "image/jpg", "image/jpeg", "image/gif"];
       const isValidType = validTypes.includes(file.type);
       const isValidSize = file.size <= 16 * 1024 * 1024; // 16MB
-      
+
       if (!isValidType) {
-        this.$message.error('请上传PNG、JPG、JPEG或GIF格式图像!');
+        this.$message.error("请上传PNG、JPG、JPEG或GIF格式图像!");
         return false;
       }
-      
+
       if (!isValidSize) {
-        this.$message.error('图像大小不能超过16MB!');
+        this.$message.error("图像大小不能超过16MB!");
         return false;
       }
-      
+
       return true;
     },
 
     startAnalysis() {
       if (!this.canAnalyze) return;
-      
+
       this.isProcessing = true;
       this.processingProgress = 0;
       this.analysisResult = null;
-      
+
       // 准备FormData
       const formData = new FormData();
-      
+
       // 添加左右眼图像（如果有）
       if (this.leftFile) {
-        formData.append('file', this.leftFile);
+        formData.append("file", this.leftFile);
       }
       if (this.rightFile) {
-        formData.append('file', this.rightFile);
+        formData.append("file", this.rightFile);
       }
-      
+
       // 设置阈值策略
-      formData.append('threshold_strategy', 'per_class');
-      
+      formData.append("threshold_strategy", "per_class");
+
       // 模拟进度条
       const interval = setInterval(() => {
         this.processingProgress += 5;
@@ -281,80 +321,89 @@ export default {
           clearInterval(interval);
         }
       }, 200);
-      
+
       // 调用API
-      fetch('http://127.0.0.1:5000/predict/class', {
-        method: 'POST',
-        body: formData
+      fetch("http://127.0.0.1:5000/predict/class", {
+        method: "POST",
+        body: formData,
       })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('分类请求失败');
-        }
-        return response.json();
-      })
-      .then(data => {
-        clearInterval(interval);
-        this.processingProgress = 100;
-        
-        // 处理API返回的结果
-        if (data.message === "Classification completed" && data.results && data.results.length > 0) {
-          this.processClassificationResults(data.results);
-        } else {
-          throw new Error(data.error || '分类失败');
-        }
-      })
-      .catch(error => {
-        clearInterval(interval);
-        console.error('分类错误:', error);
-        this.$message.error(error.message || '分类处理失败，请重试');
-      })
-      .finally(() => {
-        setTimeout(() => {
-          this.isProcessing = false;
-        }, 500);
-      });
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error("分类请求失败");
+          }
+          return response.json();
+        })
+        .then((data) => {
+          clearInterval(interval);
+          this.processingProgress = 100;
+
+          // 处理API返回的结果
+          if (
+            data.message === "Classification completed" &&
+            data.results &&
+            data.results.length > 0
+          ) {
+            this.processClassificationResults(data.results);
+          } else {
+            throw new Error(data.error || "分类失败");
+          }
+        })
+        .catch((error) => {
+          clearInterval(interval);
+          console.error("分类错误:", error);
+          this.$message.error(error.message || "分类处理失败，请重试");
+        })
+        .finally(() => {
+          setTimeout(() => {
+            this.isProcessing = false;
+          }, 500);
+        });
     },
 
     processClassificationResults(results) {
       const class_names = [
-        "AMD年龄相关性黄斑变性", 
-        "Cataract白内障", 
-        "Diabetes糖尿病视网膜病变", 
-        "Glaucoma青光眼", 
-        "Hypertension高血压视网膜病变", 
-        "Myopia近视", 
-        "Normal正常", 
-        "Other其他"
+        "AMD年龄相关性黄斑变性",
+        "Cataract白内障",
+        "Diabetes糖尿病视网膜病变",
+        "Glaucoma青光眼",
+        "Hypertension高血压视网膜病变",
+        "Myopia近视",
+        "Normal正常",
+        "Other其他",
       ];
-      
+
       // 处理每个图像的结果
       this.analysisResult = results.map((result, idx) => {
         // 准备概率数据供柱状图使用
         const chartData = class_names.map((name, index) => ({
           name: name,
           value: (result.all_probs[index] * 100).toFixed(1),
-          color: this.getBarColor(result.predicted_classes.includes(name.split('')[0]))
+          color: this.getBarColor(
+            result.predicted_classes.includes(name.split("")[0])
+          ),
         }));
-        
+
         // 获取预测的类别并去除"Normal"
-        const abnormalClasses = result.predicted_classes.filter(cls => cls !== 'Normal');
-        
+        const abnormalClasses = result.predicted_classes.filter(
+          (cls) => cls !== "Normal"
+        );
+
         return {
-          side: idx === 0 ? 'left' : 'right',
+          side: idx === 0 ? "left" : "right",
           abnormal: abnormalClasses.length > 0,
-          conclusion: abnormalClasses.length > 0 
-            ? `检测到异常: ${abnormalClasses.join(', ')}` 
-            : "未检测到明显异常",
+          conclusion:
+            abnormalClasses.length > 0
+              ? `检测到异常: ${abnormalClasses.join(", ")}`
+              : "未检测到明显异常",
           chartData: chartData,
           predictedClasses: result.predicted_classes,
-          confidence: (result.confidence * 100).toFixed(1)
+          confidence: (result.confidence * 100).toFixed(1),
         };
       });
     },
 
     getBarColor(isPredicted) {
-      return isPredicted ? '#ff6b6b' : '#39affd';
+      return isPredicted ? "#ff6b6b" : "#39affd";
     },
 
     removeImage(side) {
@@ -382,112 +431,114 @@ export default {
     // 初始化所有图表
     initCharts() {
       if (!this.analysisResult) return;
-      
-      this.analysisResult.forEach(result => {
+
+      this.analysisResult.forEach((result) => {
         const chartId = `chart-${result.side}`;
         const chartDom = document.getElementById(chartId);
-        
+
         if (!chartDom) return;
-        
+
         // 检查是否已经存在chart实例，如果存在则销毁
         const existingChart = echarts.getInstanceByDom(chartDom);
         if (existingChart) {
           existingChart.dispose();
         }
-        
+
         const myChart = echarts.init(chartDom);
-        
+
         // 图表配置
         const option = {
           tooltip: {
-            trigger: 'axis',
+            trigger: "axis",
             axisPointer: {
-              type: 'shadow'
+              type: "shadow",
             },
-            formatter: '{b}: {c}%'
+            formatter: "{b}: {c}%",
           },
           grid: {
-            left: '3%',
-            right: '4%',
-            bottom: '8%',
-            top: '3%',
-            containLabel: true
+            left: "3%",
+            right: "4%",
+            bottom: "8%",
+            top: "3%",
+            containLabel: true,
           },
           xAxis: {
-            type: 'category',
-            data: result.chartData.map(item => {
+            type: "category",
+            data: result.chartData.map((item) => {
               // 处理较长的名称，添加换行
               const name = item.name;
-              return name.length > 10 ? name.substring(0, 10) + '\n' + name.substring(10) : name;
+              return name.length > 10
+                ? name.substring(0, 10) + "\n" + name.substring(10)
+                : name;
             }),
             axisLabel: {
               interval: 0,
               rotate: 30,
-              color: '#8dd1fe',
-              fontSize: 10
+              color: "#8dd1fe",
+              fontSize: 10,
             },
             axisTick: {
               alignWithLabel: true,
               lineStyle: {
-                color: '#8dd1fe'
-              }
+                color: "#8dd1fe",
+              },
             },
             axisLine: {
               lineStyle: {
-                color: '#8dd1fe'
-              }
-            }
+                color: "#8dd1fe",
+              },
+            },
           },
           yAxis: {
-            type: 'value',
-            name: '概率 (%)',
+            type: "value",
+            name: "概率 (%)",
             nameTextStyle: {
-              color: '#8dd1fe'
+              color: "#8dd1fe",
             },
             axisLabel: {
-              color: '#8dd1fe',
-              formatter: '{value}%'
+              color: "#8dd1fe",
+              formatter: "{value}%",
             },
             axisLine: {
               lineStyle: {
-                color: '#8dd1fe'
-              }
+                color: "#8dd1fe",
+              },
             },
             splitLine: {
               lineStyle: {
-                color: 'rgba(57, 175, 253, 0.2)'
-              }
-            }
+                color: "rgba(57, 175, 253, 0.2)",
+              },
+            },
           },
           series: [
             {
-              name: '疾病概率',
-              type: 'bar',
-              barWidth: '60%',
-              data: result.chartData.map(item => ({
+              name: "疾病概率",
+              type: "bar",
+              barWidth: "60%",
+              data: result.chartData.map((item) => ({
                 value: item.value,
                 itemStyle: {
-                  color: item.color
-                }
+                  color: item.color,
+                },
               })),
               label: {
                 show: true,
-                position: 'top',
-                formatter: '{c}%',
-                color: '#8dd1fe'
-              }
-            }
-          ]
+                position: "top",
+                formatter: "{c}%",
+                color: "#8dd1fe",
+              },
+            },
+          ],
         };
-        
+
         myChart.setOption(option);
-        
+
         // 响应窗口大小变化
-        window.addEventListener('resize', () => {
+        window.addEventListener("resize", () => {
           myChart.resize();
         });
       });
-    }
+    },
   },
 };
 </script>
@@ -699,96 +750,145 @@ export default {
   margin: 0 15px;
 }
 
-.result-cards {
+.result-layout {
   display: flex;
+  gap: 20px;
+  width: 100%;
+}
+
+.result-images {
+  width: 25%;
+  display: flex;
+  flex-direction: column;
   gap: 20px;
 }
 
-.result-card {
-  flex: 1;
+.image-box {
   background: rgba(13, 28, 64, 0.5);
   border-radius: 8px;
   border: 1px solid rgba(57, 175, 253, 0.3);
   box-shadow: 0 0 15px rgba(57, 175, 253, 0.1);
   overflow: hidden;
-  display: flex;
 }
 
-.result-image {
-  width: 40%;
+.image-title {
+  background: rgba(16, 32, 67, 0.8);
+  padding: 10px 15px;
+  color: #8dd1fe;
+  font-size: 16px;
+  border-bottom: 1px solid rgba(57, 175, 253, 0.2);
+  text-align: center;
+}
+
+.image-display {
   padding: 15px;
   display: flex;
-  align-items: center;
   justify-content: center;
-  border-right: 1px solid rgba(57, 175, 253, 0.2);
+  align-items: center;
+  background-color: #000;
 }
 
-.result-image img {
+.image-display img {
   max-width: 100%;
   max-height: 200px;
   object-fit: contain;
   border-radius: 4px;
 }
 
-.result-info {
+.result-analysis {
   flex: 1;
-  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-.result-title {
+.analysis-panel {
+  background: rgba(13, 28, 64, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(57, 175, 253, 0.3);
+  box-shadow: 0 0 15px rgba(57, 175, 253, 0.1);
+  overflow: hidden;
+}
+
+.panel-header {
+  background: rgba(16, 32, 67, 0.8);
+  padding: 12px 15px;
   color: #39affd;
   font-size: 18px;
   font-weight: bold;
-  margin-bottom: 15px;
-  text-align: center;
   border-bottom: 1px solid rgba(57, 175, 253, 0.2);
-  padding-bottom: 10px;
+  text-align: center;
 }
 
-.result-item {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 8px;
-  font-size: 14px;
+.analysis-content {
+  padding: 20px;
 }
 
-.item-name {
-  color: #8dd1fe;
+.result-metrics {
+  background: rgba(16, 32, 67, 0.5);
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
 }
 
-.item-value {
-  color: #8dd1fe;
+.metric-item {
   display: flex;
   align-items: center;
+  margin-bottom: 10px;
 }
 
-.item-value.abnormal {
-  color: #ff6b6b;
+.metric-label {
+  color: #8dd1fe;
+  font-weight: bold;
+  width: 120px;
+  flex-shrink: 0;
 }
 
-.item-value i {
-  margin-left: 5px;
+.metric-value {
+  color: #39affd;
+  font-weight: bold;
 }
 
-.result-conclusion {
+.disease-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.disease-tag {
+  margin-right: 5px;
+}
+
+.chart-container {
+  height: 300px;
+  margin: 20px 0;
+}
+
+.prob-chart {
+  width: 100%;
+  height: 100%;
+}
+
+.analysis-conclusion {
   margin-top: 15px;
-  padding: 10px;
+  padding: 12px;
   background: rgba(16, 32, 67, 0.5);
-  border-radius: 4px;
+  border-radius: 8px;
   color: #39affd;
   display: flex;
   align-items: center;
   font-weight: bold;
+  font-size: 16px;
 }
 
-.result-conclusion.abnormal {
+.analysis-conclusion.abnormal {
   color: #ff6b6b;
   background: rgba(255, 107, 107, 0.1);
 }
 
-.result-conclusion i {
-  margin-right: 8px;
-  font-size: 18px;
+.analysis-conclusion i {
+  margin-right: 10px;
+  font-size: 20px;
 }
 
 .processing-overlay {
@@ -909,7 +1009,22 @@ export default {
     flex-direction: column;
   }
 
-  .result-cards {
+  .result-layout {
+    flex-direction: column;
+  }
+
+  .result-images {
+    width: 100%;
+    flex-direction: row;
+  }
+
+  .image-box {
+    flex: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .result-images {
     flex-direction: column;
   }
 }

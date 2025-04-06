@@ -584,4 +584,168 @@ export default {
     flex-direction: column;
   }
 }
+
+/* 新增和修改的样式 */
+.result-layout {
+  display: flex;
+  gap: 20px;
+  width: 100%;
+}
+
+.result-images {
+  width: 25%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.image-box {
+  background: rgba(13, 28, 64, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(57, 175, 253, 0.3);
+  box-shadow: 0 0 15px rgba(57, 175, 253, 0.1);
+  overflow: hidden;
+}
+
+.image-title {
+  background: rgba(16, 32, 67, 0.8);
+  padding: 10px 15px;
+  color: #8dd1fe;
+  font-size: 16px;
+  border-bottom: 1px solid rgba(57, 175, 253, 0.2);
+  text-align: center;
+}
+
+.image-display {
+  padding: 15px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #000;
+}
+
+.image-display img {
+  max-width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.result-analysis {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.analysis-panel {
+  background: rgba(13, 28, 64, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(57, 175, 253, 0.3);
+  box-shadow: 0 0 15px rgba(57, 175, 253, 0.1);
+  overflow: hidden;
+}
+
+.panel-header {
+  background: rgba(16, 32, 67, 0.8);
+  padding: 12px 15px;
+  color: #39affd;
+  font-size: 18px;
+  font-weight: bold;
+  border-bottom: 1px solid rgba(57, 175, 253, 0.2);
+  text-align: center;
+}
+
+.analysis-content {
+  padding: 20px;
+}
+
+.result-metrics {
+  background: rgba(16, 32, 67, 0.5);
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.metric-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.metric-label {
+  color: #8dd1fe;
+  font-weight: bold;
+  width: 120px;
+  flex-shrink: 0;
+}
+
+.metric-value {
+  color: #39affd;
+  font-weight: bold;
+}
+
+.disease-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.disease-tag {
+  margin-right: 5px;
+}
+
+.chart-container {
+  height: 300px;
+  margin: 20px 0;
+}
+
+.prob-chart {
+  width: 100%;
+  height: 100%;
+}
+
+.analysis-conclusion {
+  margin-top: 15px;
+  padding: 12px;
+  background: rgba(16, 32, 67, 0.5);
+  border-radius: 8px;
+  color: #39affd;
+  display: flex;
+  align-items: center;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.analysis-conclusion.abnormal {
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.analysis-conclusion i {
+  margin-right: 10px;
+  font-size: 20px;
+}
+
+/* 响应式调整 */
+@media (max-width: 1200px) {
+  .result-layout {
+    flex-direction: column;
+  }
+
+  .result-images {
+    width: 100%;
+    flex-direction: row;
+  }
+
+  .image-box {
+    flex: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .result-images {
+    flex-direction: column;
+  }
+}
 </style>
