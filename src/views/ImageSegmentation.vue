@@ -113,6 +113,14 @@
                 :class="{ active: activeTab === 'segmented' }"
                 @click="activeTab = 'segmented'"
               >
+                叠加显示
+              </div>
+
+              <div
+                class="tab-item"
+                :class="{ active: activeTab === 'segmented' }"
+                @click="activeTab = 'superposed'"
+              >
                 分割结果
               </div>
             </div>

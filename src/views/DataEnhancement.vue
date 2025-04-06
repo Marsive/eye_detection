@@ -1,25 +1,11 @@
 <template>
   <div class="data-enhancement-container">
-    <div class="module-title">图像数据增强</div>
+    <div class="module-title">眼底图像低光增强</div>
 
     <div class="content-wrapper">
-      <!-- 左侧面板：增强选项 + 上传区域 -->
+      <!-- 左侧面板：上传区域 -->
       <div class="left-panel">
-        <div class="section-title">数据增强选项</div>
-        <div class="enhancement-options">
-          <el-button
-            v-for="option in augmentations"
-            :key="option.value"
-            :class="{
-              'active-button': selectedAugmentations.includes(option.value),
-            }"
-            @click="toggleAugmentation(option.value)"
-          >
-            {{ option.label }}
-          </el-button>
-        </div>
-
-        <div class="section-title mt-20">上传眼底图像</div>
+        <div class="section-title">上传眼底图像</div>
         <div class="upload-area">
           <el-upload
             class="image-uploader"
@@ -32,13 +18,14 @@
             :with-credentials="false"
             :limit="1"
             ref="upload"
+            :auto-upload="false"
           >
-            <div class="upload-placeholder" v-if="!originalImageUrl">
+            <div class="upload-placeholder" v-if="!uploadedImageUrl">
               <i class="el-icon-upload"></i>
               <div class="upload-text">点击上传图像</div>
             </div>
             <div v-else class="preview-container">
-              <img :src="originalImageUrl" class="preview-image" />
+              <img :src="uploadedImageUrl" class="preview-image" />
               <div class="delete-button" @click.stop="removeUploadedImage">
                 <i class="el-icon-delete"></i>
               </div>
@@ -47,60 +34,115 @@
         </div>
       </div>
 
-      <!-- 右侧面板：原始图像显示 + 执行增强按钮 + 增强结果 -->
+      <!-- 右侧面板：增强结果 -->
       <div class="right-panel">
-        <div class="section-title">原始图像</div>
-        <div class="image-display" ref="originalImageContainer">
-          <div v-if="!originalImageUrl" class="empty-state">
-            <i class="el-icon-picture-outline"></i>
-            <p>请先上传图像</p>
-          </div>
-          <!-- 使用本地预览URL展示原图 -->
-          <img
-            v-else
-            :src="originalImageUrl"
-            class="display-image"
-            ref="originalImageElement"
-          />
-        </div>
-
-        <el-button
-          type="primary"
-          class="process-button"
-          @click="applyAugmentation"
-          :disabled="!originalImageUrl || selectedAugmentations.length === 0"
-          :loading="processing"
-        >
-          <i class="el-icon-refresh-right"></i> 执行数据增强
-        </el-button>
-
-        <div class="section-title mt-20">增强结果</div>
-        <div class="image-display" :style="resultContainerStyle">
-          <div
-            v-if="!augmentedImages || augmentedImages.length === 0"
-            class="empty-state"
+        <div class="section-title-container">
+          <div class="section-title">增强结果</div>
+          <el-button
+            v-if="enhancedImages.length > 0"
+            type="primary"
+            size="small"
+            class="more-features-btn"
+            @click="showCanvasEditor"
           >
+            <i class="el-icon-edit"></i> 更多功能
+          </el-button>
+        </div>
+        <div class="image-display">
+          <div v-if="enhancedImages.length === 0" class="empty-state">
             <i class="el-icon-data-analysis"></i>
             <p>增强结果将显示在这里</p>
           </div>
           <div v-else class="enhanced-images-container">
-            <div
-              v-for="(image, index) in augmentedImages"
-              :key="index"
-              class="enhanced-image-item"
-            >
-              <img :src="image.url" class="display-image" :style="imageStyle" />
-              <div class="image-label">{{ image.label }}</div>
+            <div v-for="(image, index) in enhancedImages" :key="index" class="enhanced-image-item">
+              <img :src="image.url" class="display-image" />
+              <div class="image-label">增强图像 {{ index + 1 }}</div>
             </div>
           </div>
           <el-button
-            v-if="augmentedImages && augmentedImages.length > 0"
+            v-if="enhancedImages.length > 0"
             type="success"
             class="download-button"
-            @click="downloadAugmentedImages"
+            @click="downloadEnhancedImages"
           >
             <i class="el-icon-download"></i> 下载增强图像
           </el-button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部操作区域 -->
+    <div class="action-area">
+      <el-button
+        type="primary"
+        class="enhance-button"
+        @click="applyLowLightEnhancement"
+        :disabled="!uploadedImageUrl || processing"
+        :loading="processing"
+      >
+        <i class="el-icon-magic-stick"></i> 执行低光增强
+      </el-button>
+    </div>
+
+    <!-- 画布编辑器弹窗 -->
+    <div class="canvas-editor-overlay" v-if="showEditor" @click.self="closeCanvasEditor">
+      <div class="canvas-editor-container">
+        <div class="editor-header">
+          <div class="editor-title">图像编辑</div>
+          <div class="editor-tools">
+            <el-button-group>
+              <el-button 
+                type="primary" 
+                size="small" 
+                :class="{ 'active-tool': currentTool === 'rotate' }" 
+                @click="setTool('rotate')"
+              >
+                <i class="el-icon-refresh-right"></i> 随机旋转
+              </el-button>
+              <el-button 
+                type="primary" 
+                size="small" 
+                :class="{ 'active-tool': currentTool === 'flip' }" 
+                @click="setTool('flip')"
+              >
+                <i class="el-icon-sort"></i> 水平翻转
+              </el-button>
+              <el-button 
+                type="primary" 
+                size="small" 
+                :class="{ 'active-tool': currentTool === 'brush' }" 
+                @click="setTool('brush')"
+              >
+                <i class="el-icon-brush"></i> 画笔
+              </el-button>
+              <el-button 
+                type="primary" 
+                size="small" 
+                :class="{ 'active-tool': currentTool === 'eraser' }" 
+                @click="setTool('eraser')"
+              >
+                <i class="el-icon-delete"></i> 橡皮擦
+              </el-button>
+              <el-button 
+                type="primary" 
+                size="small" 
+                @click="undoOperation" 
+                :disabled="!canUndo"
+              >
+                <i class="el-icon-back"></i> 撤销操作
+              </el-button>
+            </el-button-group>
+          </div>
+          <el-button type="danger" size="small" circle @click="closeCanvasEditor">
+            <i class="el-icon-close"></i>
+          </el-button>
+        </div>
+        <div class="editor-content">
+          <canvas ref="canvas" class="edit-canvas"></canvas>
+        </div>
+        <div class="editor-footer">
+          <el-button type="primary" @click="saveEditedImage">保存</el-button>
+          <el-button @click="closeCanvasEditor">取消</el-button>
         </div>
       </div>
     </div>
@@ -112,58 +154,27 @@ export default {
   data() {
     return {
       processing: false,
-      selectedAugmentations: [],
-      originalImage: "", // 用来存储服务器返回的图像路径
       originalImageFile: null, // 记录本地上传的文件对象
       originalImageUrl: "", // 本地预览URL
-      augmentedImages: [], // 存放所有增强后（含客户端/服务器等）的结果
-      augmentations: [
-        { label: "随机旋转", value: "rotate" },
-        { label: "水平翻转", value: "flip" },
-        { label: "低光增强", value: "contrast" },
-      ],
-      // 上传地址，注意这里指向后端的"低光增强"接口
+      enhancedImages: [], // 存放增强后的结果
+      // 上传地址
       uploadUrl: "http://127.0.0.1:5000/predict/lowlight",
-      // 用于保持图像显示一致性的样式
-      resultContainerStyle: {
-        height: "300px",
-      },
-      imageStyle: {},
+
+      // 画布编辑器相关
+      showEditor: false,
+      canvas: null,
+      ctx: null,
+      currentTool: null,
+      canUndo: false,
+      editHistory: [],
+      currentImage: null,
+      isDrawing: false,
+      lastX: 0,
+      lastY: 0,
     };
   },
-  mounted() {
-    // 添加窗口大小变化监听
-    window.addEventListener("resize", this.updateImageContainerSize);
-  },
-  beforeDestroy() {
-    // 移除监听器
-    window.removeEventListener("resize", this.updateImageContainerSize);
-  },
   methods: {
-    // 更新图像容器尺寸以保持一致
-    updateImageContainerSize() {
-      // 检查原图元素是否存在
-      if (this.$refs.originalImageElement) {
-        // 取原图容器的宽高
-        const container = this.$refs.originalImageContainer;
-        if (container) {
-          this.resultContainerStyle = {
-            height: `${container.clientHeight}px`,
-          };
-        }
-      }
-    },
-
-    toggleAugmentation(value) {
-      const index = this.selectedAugmentations.indexOf(value);
-      if (index > -1) {
-        this.selectedAugmentations.splice(index, 1);
-      } else {
-        this.selectedAugmentations.push(value);
-      }
-    },
-
-    // 上传前的检查，同时可以在这里记录本地 File 对象
+    // 上传前的检查
     beforeUpload(file) {
       const isImage = file.type.startsWith("image/");
       const isLt5M = file.size / 1024 / 1024 < 5;
@@ -176,204 +187,91 @@ export default {
         return false;
       }
 
-      // 记录下文件对象，用于后续客户端旋转/翻转处理
+      // 记录文件对象
       this.originalImageFile = file;
       // 本地预览URL
       this.originalImageUrl = URL.createObjectURL(file);
 
-      return true;
+      return false; // 不自动上传
     },
 
     // 上传成功后回调
     handleUploadSuccess(response) {
       if (response && response.outputs && response.outputs.length > 0) {
-        // 保存服务器返回的图像路径
-        this.originalImage = `http://127.0.0.1:5000/download/${response.outputs[0]}`;
+        this.processing = false;
 
-        // 确保我们仍然有本地文件对象用于前端处理
-        if (this.$refs.upload.uploadFiles.length > 0) {
-          this.originalImageFile = this.$refs.upload.uploadFiles[0].raw;
-        }
+        // 将后端返回的所有图片添加到增强结果中
+        const enhancedImages = response.outputs.map((output, index) => ({
+          url: `http://127.0.0.1:5000/download/${output}`,
+          label: `增强图像 ${index + 1}`,
+          filename: output,
+        }));
 
-        // 清空之前的增强结果列表
-        this.augmentedImages = [];
-        this.$message.success("图像上传成功并完成服务器增强");
+        this.enhancedImages = enhancedImages;
 
-        // 更新图像容器尺寸
-        this.$nextTick(this.updateImageContainerSize);
+        this.$message.success("低光增强完成");
       } else {
-        this.$message.error(response.message || "上传失败");
+        this.processing = false;
+        this.$message.error(response.message || "增强失败");
       }
     },
 
     // 上传出错回调
     handleUploadError(error) {
+      this.processing = false;
       console.error("上传错误:", error);
-      this.$message.error("图像上传失败，请重试");
+      this.$message.error("图像处理失败，请重试");
     },
 
-    // 点击执行数据增强按钮
-    async applyAugmentation() {
-      if (!this.originalImageUrl || this.selectedAugmentations.length === 0)
+    // 执行低光增强
+    applyLowLightEnhancement() {
+      if (!this.originalImageFile) {
+        this.$message.warning("请先上传图像");
         return;
-      try {
-        this.processing = true;
-        // 每次点击处理时先清空之前的增强结果
-        this.augmentedImages = [];
-
-        // 先执行前端的旋转、翻转处理
-        await this.processClientSideAugmentations();
-
-        // 如果选择了"低光增强"，再执行服务器端处理
-        if (this.selectedAugmentations.includes("contrast")) {
-          await this.processServerSideAugmentations();
-        }
-
-        // 更新结果显示尺寸
-        this.$nextTick(this.updateImageContainerSize);
-        this.$message.success("增强处理完成");
-      } catch (error) {
-        console.error("增强处理错误:", error);
-        this.$message.error("增强处理失败，请重试");
-      } finally {
-        this.processing = false;
       }
-    },
 
-    // 前端处理（旋转 + 翻转）
-    async processClientSideAugmentations() {
-      if (!this.originalImageFile) return;
+      this.processing = true;
 
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          // 记录原始图像尺寸用于显示
-          const originalWidth = img.width;
-          const originalHeight = img.height;
-
-          // 记录图像尺寸以保持一致的显示效果
-          this.imageStyle = {
-            width: `${originalWidth}px`,
-            height: `${originalHeight}px`,
-            objectFit: "contain",
-          };
-
-          if (this.selectedAugmentations.includes("rotate")) {
-            const rotatedCanvas = this.rotateImage(img);
-            const rotatedDataUrl = rotatedCanvas.toDataURL("image/jpeg");
-            this.augmentedImages.push({
-              url: rotatedDataUrl,
-              label: "随机旋转",
-              downloadUrl: rotatedDataUrl,
-            });
-          }
-
-          if (this.selectedAugmentations.includes("flip")) {
-            const flippedCanvas = this.flipImage(img);
-            const flippedDataUrl = flippedCanvas.toDataURL("image/jpeg");
-            this.augmentedImages.push({
-              url: flippedDataUrl,
-              label: "水平翻转",
-              downloadUrl: flippedDataUrl,
-            });
-          }
-
-          resolve();
-        };
-        // 使用本地预览地址作为图像源确保处理的是原始图像
-        img.src = this.originalImageUrl;
-      });
-    },
-
-    // 随机旋转
-    rotateImage(img) {
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      // 这里随便转个随机角度
-      const angle = Math.random() * 360;
-      const radians = (angle * Math.PI) / 180;
-      const sin = Math.abs(Math.sin(radians));
-      const cos = Math.abs(Math.cos(radians));
-
-      // 计算旋转后画布需要多大尺寸
-      canvas.width = Math.floor(img.width * cos + img.height * sin);
-      canvas.height = Math.floor(img.width * sin + img.height * cos);
-
-      // 画布中心旋转
-      ctx.translate(canvas.width / 2, canvas.height / 2);
-      ctx.rotate(radians);
-      // 绘制原图
-      ctx.drawImage(img, -img.width / 2, -img.height / 2);
-      return canvas;
-    },
-
-    // 水平翻转
-    flipImage(img) {
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      canvas.width = img.width;
-      canvas.height = img.height;
-      // 水平翻转
-      ctx.translate(img.width, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(img, 0, 0);
-      return canvas;
-    },
-
-    // 服务器端处理低光增强
-    async processServerSideAugmentations() {
-      // 这里需要把原图文件再发给后端
-      if (!this.originalImageFile) return;
+      // 创建FormData并添加文件
       const formData = new FormData();
       formData.append("file", this.originalImageFile);
 
-      // 发送请求
-      const response = await axios.post(this.uploadUrl, formData);
+      // 使用el-upload的submit方法
+      this.$refs.upload.submit();
 
-      if (
-        response.data &&
-        response.data.outputs &&
-        response.data.outputs.length > 0
-      ) {
-        // 使用服务器返回的增强后图像URL
-        const serverImgUrl = `http://127.0.0.1:5000/download/${response.data.outputs[0]}`;
-        this.augmentedImages.push({
-          url: serverImgUrl,
-          label: "低光增强",
-          downloadUrl: serverImgUrl,
-        });
-      } else {
-        throw new Error(response.data.message || "低光增强请求失败");
-      }
+      this.$message.info("正在处理图像，请稍候...");
     },
 
-    // 下载所有增强图
-    async downloadAugmentedImages() {
-      for (const image of this.augmentedImages) {
+    // 下载增强图像
+    async downloadEnhancedImages() {
+      if (!this.enhancedImages || this.enhancedImages.length === 0) {
+        this.$message.warning("没有可下载的增强图像");
+        return;
+      }
+
+      for (const image of this.enhancedImages) {
         const a = document.createElement("a");
-        a.href = image.downloadUrl; // 使用下载URL
-        a.download = `enhanced_${image.label}.jpg`;
+        a.href = image.url;
+        a.download = image.filename || `enhanced_image_${Date.now()}.jpg`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         // 下载间隔，防止同时触发下载事件冲突
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
+
+      this.$message.success("开始下载增强图像");
     },
 
     // 删除上传图片
     removeUploadedImage(e) {
-      // 阻止事件冒泡，避免触发上传
       if (e) {
         e.stopPropagation();
       }
 
       // 清空所有图像相关数据
-      this.originalImage = "";
       this.originalImageFile = null;
       this.originalImageUrl = "";
-      this.augmentedImages = [];
-      this.imageStyle = {};
 
       // 重置上传组件
       if (this.$refs.upload) {
@@ -381,6 +279,267 @@ export default {
       }
 
       this.$message.success("图像已删除");
+    },
+
+    // 显示画布编辑器
+    showCanvasEditor() {
+      if (this.enhancedImages.length === 0) {
+        this.$message.warning("没有可编辑的增强图像");
+        return;
+      }
+
+      this.showEditor = true;
+
+      // 下一个事件循环再初始化画布，确保DOM已渲染
+      this.$nextTick(() => {
+        this.initCanvas();
+      });
+    },
+
+    // 初始化画布
+    initCanvas() {
+      const canvas = this.$refs.canvas;
+      if (!canvas) return;
+
+      this.canvas = canvas;
+      this.ctx = canvas.getContext("2d");
+
+      // 加载第一张增强图像到画布
+      const img = new Image();
+      img.onload = () => {
+        // 设置画布尺寸与图像一致
+        canvas.width = img.width;
+        canvas.height = img.height;
+
+        // 绘制图像
+        this.ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        // 保存初始状态
+        this.saveCanvasState();
+        this.currentImage = img;
+
+        // 添加鼠标事件
+        this.addCanvasEvents();
+      };
+
+      img.src = this.enhancedImages[0].url;
+    },
+
+    // 添加画布事件
+    addCanvasEvents() {
+      const canvas = this.canvas;
+
+      canvas.addEventListener("mousedown", (e) => {
+        if (this.currentTool !== "brush" && this.currentTool !== "eraser")
+          return;
+
+        this.isDrawing = true;
+        const rect = canvas.getBoundingClientRect();
+        this.lastX = e.clientX - rect.left;
+        this.lastY = e.clientY - rect.top;
+      });
+
+      canvas.addEventListener("mousemove", (e) => {
+        if (!this.isDrawing) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const currentX = e.clientX - rect.left;
+        const currentY = e.clientY - rect.top;
+
+        if (this.currentTool === "brush") {
+          this.ctx.strokeStyle = "#39affd";
+          this.ctx.lineWidth = 5;
+          this.ctx.lineCap = "round";
+          this.ctx.beginPath();
+          this.ctx.moveTo(this.lastX, this.lastY);
+          this.ctx.lineTo(currentX, currentY);
+          this.ctx.stroke();
+        } else if (this.currentTool === "eraser") {
+          this.ctx.globalCompositeOperation = "destination-out";
+          this.ctx.strokeStyle = "rgba(0,0,0,1)";
+          this.ctx.lineWidth = 20;
+          this.ctx.lineCap = "round";
+          this.ctx.beginPath();
+          this.ctx.moveTo(this.lastX, this.lastY);
+          this.ctx.lineTo(currentX, currentY);
+          this.ctx.stroke();
+          this.ctx.globalCompositeOperation = "source-over";
+        }
+
+        this.lastX = currentX;
+        this.lastY = currentY;
+      });
+
+      canvas.addEventListener("mouseup", () => {
+        if (this.isDrawing) {
+          this.isDrawing = false;
+          this.saveCanvasState();
+        }
+      });
+
+      canvas.addEventListener("mouseleave", () => {
+        if (this.isDrawing) {
+          this.isDrawing = false;
+          this.saveCanvasState();
+        }
+      });
+    },
+
+    // 设置当前工具
+    setTool(tool) {
+      this.currentTool = tool;
+
+      if (tool === "rotate") {
+        this.rotateImage();
+      } else if (tool === "flip") {
+        this.flipImage();
+      }
+    },
+
+    // 旋转图像
+    rotateImage() {
+      if (!this.canvas || !this.ctx || !this.currentImage) return;
+
+      const canvas = this.canvas;
+      const ctx = this.ctx;
+      const img = this.currentImage;
+
+      // 随机角度 (0-360度)
+      const angle = Math.floor(Math.random() * 360);
+      const radians = (angle * Math.PI) / 180;
+
+      // 保存当前状态
+      this.saveCanvasState();
+
+      // 计算旋转后的画布尺寸
+      const diagonal = Math.sqrt(
+        canvas.width * canvas.width + canvas.height * canvas.height
+      );
+      const newWidth = diagonal;
+      const newHeight = diagonal;
+
+      // 创建临时画布以避免失真
+      const tempCanvas = document.createElement("canvas");
+      const tempCtx = tempCanvas.getContext("2d");
+      tempCanvas.width = newWidth;
+      tempCanvas.height = newHeight;
+
+      // 在临时画布上绘制旋转后的图像
+      tempCtx.translate(newWidth / 2, newHeight / 2);
+      tempCtx.rotate(radians);
+      tempCtx.drawImage(img, -img.width / 2, -img.height / 2);
+
+      // 更新主画布尺寸
+      canvas.width = newWidth;
+      canvas.height = newHeight;
+
+      // 将临时画布内容绘制到主画布
+      ctx.drawImage(tempCanvas, 0, 0);
+
+      this.$message.success(`图像已旋转 ${angle}°`);
+      this.saveCanvasState();
+    },
+
+    // 水平翻转图像
+    flipImage() {
+      if (!this.canvas || !this.ctx || !this.currentImage) return;
+
+      const canvas = this.canvas;
+      const ctx = this.ctx;
+
+      // 保存当前状态
+      this.saveCanvasState();
+
+      // 创建临时画布
+      const tempCanvas = document.createElement("canvas");
+      const tempCtx = tempCanvas.getContext("2d");
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+
+      // 复制当前画布内容
+      tempCtx.drawImage(canvas, 0, 0);
+
+      // 清除主画布
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 水平翻转绘制
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(tempCanvas, 0, 0);
+
+      // 重置变换
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+      this.$message.success("图像已水平翻转");
+      this.saveCanvasState();
+    },
+
+    // 保存画布状态用于撤销
+    saveCanvasState() {
+      if (!this.canvas) return;
+
+      const imageData = this.ctx.getImageData(
+        0,
+        0,
+        this.canvas.width,
+        this.canvas.height
+      );
+      this.editHistory.push(imageData);
+
+      // 限制历史记录数量以节省内存
+      if (this.editHistory.length > 10) {
+        this.editHistory.shift();
+      }
+
+      this.canUndo = this.editHistory.length > 1;
+    },
+
+    // 撤销操作
+    undoOperation() {
+      if (this.editHistory.length <= 1) return;
+
+      // 移除当前状态
+      this.editHistory.pop();
+
+      // 获取上一个状态
+      const previousState = this.editHistory[this.editHistory.length - 1];
+
+      // 恢复上一个状态
+      this.ctx.putImageData(previousState, 0, 0);
+
+      this.canUndo = this.editHistory.length > 1;
+    },
+
+    // 保存编辑后的图像
+    saveEditedImage() {
+      if (!this.canvas) return;
+
+      // 获取画布数据URL
+      const dataUrl = this.canvas.toDataURL("image/jpeg");
+
+      // 创建新的增强图像对象
+      const newImage = {
+        url: dataUrl,
+        label: "编辑后的图像",
+        filename: `edited_image_${Date.now()}.jpg`,
+        isEdited: true,
+      };
+
+      // 添加到增强图像列表
+      this.enhancedImages.push(newImage);
+
+      this.closeCanvasEditor();
+      this.$message.success("编辑后的图像已保存");
+    },
+
+    // 关闭画布编辑器
+    closeCanvasEditor() {
+      this.showEditor = false;
+      this.currentTool = null;
+      this.canUndo = false;
+      this.editHistory = [];
+      this.currentImage = null;
+      this.isDrawing = false;
     },
   },
 };
@@ -390,19 +549,24 @@ export default {
 .data-enhancement-container {
   padding: 20px;
   color: #fff;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 80px);
 }
 
 .module-title {
   font-size: 24px;
   color: #39affd;
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 20px;
   text-shadow: 0 0 10px rgba(57, 175, 253, 0.5);
 }
 
 .content-wrapper {
   display: flex;
   gap: 20px;
+  flex: 1;
+  margin-bottom: 20px;
 }
 
 .left-panel,
@@ -413,6 +577,14 @@ export default {
   box-shadow: 0 0 25px rgba(57, 175, 253, 0.2);
   border: 1px solid rgba(57, 175, 253, 0.3);
   padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.section-title-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .section-title {
@@ -421,15 +593,10 @@ export default {
   margin-bottom: 15px;
 }
 
-.mt-20 {
-  margin-top: 20px;
-}
-
-.enhancement-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 20px;
+.more-features-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
 }
 
 .upload-area {
@@ -437,6 +604,10 @@ export default {
   border-radius: 8px;
   padding: 20px;
   text-align: center;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .upload-placeholder {
@@ -460,15 +631,17 @@ export default {
 .preview-container {
   position: relative;
   width: 100%;
-  height: 150px;
+  height: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
+  flex: 1;
+  min-height: 200px;
 }
 
 .preview-image {
-  width: 100%;
-  max-height: 150px;
+  max-width: 100%;
+  max-height: 100%;
   object-fit: contain;
 }
 
@@ -499,7 +672,7 @@ export default {
 }
 
 .image-display {
-  height: 300px;
+  flex: 1;
   border: 1px solid rgba(57, 175, 253, 0.3);
   border-radius: 8px;
   display: flex;
@@ -517,6 +690,7 @@ export default {
   align-items: center;
   justify-content: center;
   color: #8dd1fe;
+  height: 100%;
 }
 
 .empty-state i {
@@ -550,10 +724,27 @@ export default {
   font-size: 14px;
 }
 
-.process-button {
-  width: 100%;
-  margin: 20px 0;
-  height: 40px;
+.action-area {
+  display: flex;
+  justify-content: center;
+  margin-top: auto;
+  padding: 10px 0;
+}
+
+.enhance-button {
+  padding: 12px 30px;
+  font-size: 16px;
+  border-radius: 4px;
+  background: linear-gradient(to right, #3077b1, #39affd);
+  border: none;
+  box-shadow: 0 0 15px rgba(57, 175, 253, 0.3);
+  transition: all 0.3s ease;
+}
+
+.enhance-button:hover:not(:disabled) {
+  background: linear-gradient(to right, #39affd, #3077b1);
+  box-shadow: 0 0 20px rgba(57, 175, 253, 0.5);
+  transform: translateY(-2px);
 }
 
 .download-button {
@@ -562,190 +753,131 @@ export default {
   right: 10px;
 }
 
-/* 修改后的颜色方案 */
+/* 画布编辑器样式 */
+.canvas-editor-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(5, 18, 49, 0.8);
+  backdrop-filter: blur(5px); /* 添加高斯模糊 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.canvas-editor-container {
+  background: rgba(13, 28, 64, 0.9);
+  border-radius: 12px;
+  box-shadow: 0 0 30px rgba(57, 175, 253, 0.3);
+  border: 1px solid rgba(57, 175, 253, 0.4);
+  width: 90%;
+  max-width: 1000px;
+  height: 80%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.editor-header {
+  padding: 15px;
+  border-bottom: 1px solid rgba(57, 175, 253, 0.3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.editor-title {
+  font-size: 18px;
+  color: #39affd;
+  font-weight: bold;
+}
+
+.editor-tools {
+  display: flex;
+  gap: 10px;
+}
+
+.editor-content {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  overflow: auto;
+  background-color: #000;
+}
+
+.edit-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  box-shadow: 0 0 20px rgba(57, 175, 253, 0.2);
+  background-color: #000;
+}
+
+.editor-footer {
+  padding: 15px;
+  border-top: 1px solid rgba(57, 175, 253, 0.3);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.active-tool {
+  background: linear-gradient(45deg, #6ad4ff, #42a5ff) !important;
+  border-color: #8dd1fe !important;
+}
+
+/* 全局样式覆盖 */
 ::v-deep .el-button {
-  background: rgba(42, 128, 255, 0.9) !important; /* 亮蓝 */
+  background: rgba(42, 128, 255, 0.9) !important;
   border-color: #6ad4ff !important;
   color: white !important;
 }
 
+::v-deep .el-button:hover {
+  background: rgba(57, 175, 253, 0.8) !important;
+}
+
 ::v-deep .el-button.active-button {
-  background: linear-gradient(45deg, #6ad4ff, #42a5ff) !important; /* 渐变 */
+  background: linear-gradient(45deg, #6ad4ff, #42a5ff) !important;
 }
 
-.upload-area ::v-deep .el-upload-dragger {
-  background: rgba(16, 62, 127, 0.8) !important; /* 深蓝 */
-  border-color: #42a5ff !important;
-  width: 100%;
-}
-
-@media (max-width: 768px) {
-  .content-wrapper {
-    flex-direction: column;
-  }
-}
-
-/* 新增和修改的样式 */
-.result-layout {
-  display: flex;
-  gap: 20px;
-  width: 100%;
-}
-
-.result-images {
-  width: 25%;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.image-box {
-  background: rgba(13, 28, 64, 0.5);
-  border-radius: 8px;
-  border: 1px solid rgba(57, 175, 253, 0.3);
-  box-shadow: 0 0 15px rgba(57, 175, 253, 0.1);
-  overflow: hidden;
-}
-
-.image-title {
-  background: rgba(16, 32, 67, 0.8);
-  padding: 10px 15px;
-  color: #8dd1fe;
-  font-size: 16px;
-  border-bottom: 1px solid rgba(57, 175, 253, 0.2);
-  text-align: center;
-}
-
-.image-display {
-  padding: 15px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background-color: #000;
-}
-
-.image-display img {
-  max-width: 100%;
-  max-height: 200px;
-  object-fit: contain;
-  border-radius: 4px;
-}
-
-.result-analysis {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.analysis-panel {
-  background: rgba(13, 28, 64, 0.5);
-  border-radius: 8px;
-  border: 1px solid rgba(57, 175, 253, 0.3);
-  box-shadow: 0 0 15px rgba(57, 175, 253, 0.1);
-  overflow: hidden;
-}
-
-.panel-header {
-  background: rgba(16, 32, 67, 0.8);
-  padding: 12px 15px;
-  color: #39affd;
-  font-size: 18px;
-  font-weight: bold;
-  border-bottom: 1px solid rgba(57, 175, 253, 0.2);
-  text-align: center;
-}
-
-.analysis-content {
-  padding: 20px;
-}
-
-.result-metrics {
-  background: rgba(16, 32, 67, 0.5);
-  border-radius: 8px;
-  padding: 15px;
-  margin-bottom: 20px;
-}
-
-.metric-item {
-  display: flex;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.metric-label {
-  color: #8dd1fe;
-  font-weight: bold;
-  width: 120px;
-  flex-shrink: 0;
-}
-
-.metric-value {
-  color: #39affd;
-  font-weight: bold;
-}
-
-.disease-types {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.disease-tag {
-  margin-right: 5px;
-}
-
-.chart-container {
-  height: 300px;
-  margin: 20px 0;
-}
-
-.prob-chart {
+.upload-area ::v-deep .el-upload {
   width: 100%;
   height: 100%;
 }
 
-.analysis-conclusion {
-  margin-top: 15px;
-  padding: 12px;
-  background: rgba(16, 32, 67, 0.5);
-  border-radius: 8px;
-  color: #39affd;
+.upload-area ::v-deep .el-upload-dragger {
+  background: rgba(16, 62, 127, 0.8) !important;
+  border-color: #42a5ff !important;
+  width: 100%;
+  height: 100%;
   display: flex;
+  justify-content: center;
   align-items: center;
-  font-weight: bold;
-  font-size: 16px;
-}
-
-.analysis-conclusion.abnormal {
-  color: #ff6b6b;
-  background: rgba(255, 107, 107, 0.1);
-}
-
-.analysis-conclusion i {
-  margin-right: 10px;
-  font-size: 20px;
 }
 
 /* 响应式调整 */
-@media (max-width: 1200px) {
-  .result-layout {
-    flex-direction: column;
-  }
-
-  .result-images {
-    width: 100%;
-    flex-direction: row;
-  }
-
-  .image-box {
-    flex: 1;
-  }
-}
-
 @media (max-width: 768px) {
-  .result-images {
+  .content-wrapper {
     flex-direction: column;
+  }
+
+  .canvas-editor-container {
+    width: 95%;
+    height: 90%;
+  }
+
+  .editor-tools {
+    margin-top: 10px;
+  }
+
+  .editor-header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 </style>

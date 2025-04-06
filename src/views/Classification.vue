@@ -539,6 +539,20 @@ export default {
         });
       });
     },
+
+    getTagType(disease) {
+      if (disease === "Normal") return "success";
+      const diseaseTypes = {
+        AMD: "danger",
+        Glaucoma: "danger",
+        Diabetes: "warning",
+        Cataract: "warning",
+        Hypertension: "warning",
+        Myopia: "info",
+        Other: "info",
+      };
+      return diseaseTypes[disease] || "danger";
+    },
   },
 };
 </script>
