@@ -115,13 +115,6 @@
               >
                 分割结果
               </div>
-              <div
-                class="tab-item"
-                :class="{ active: activeTab === 'overlay' }"
-                @click="activeTab = 'overlay'"
-              >
-                叠加显示
-              </div>
             </div>
 
             <div class="result-display">
@@ -129,27 +122,11 @@
             </div>
 
             <div class="result-info">
-              <div class="info-card">
-                <div class="info-icon"><i class="el-icon-aim"></i></div>
-                <div class="info-content">
-                  <div class="info-value">{{ segmentationInfo.regions }}</div>
-                  <div class="info-label">分割区域</div>
-                </div>
-              </div>
-
-              <div class="info-card">
+              <div class="info-card time-card">
                 <div class="info-icon"><i class="el-icon-timer"></i></div>
                 <div class="info-content">
                   <div class="info-value">{{ segmentationInfo.time }}s</div>
                   <div class="info-label">处理时间</div>
-                </div>
-              </div>
-
-              <div class="info-card">
-                <div class="info-icon"><i class="el-icon-data-line"></i></div>
-                <div class="info-content">
-                  <div class="info-value">{{ segmentationInfo.accuracy }}%</div>
-                  <div class="info-label">分割精度</div>
                 </div>
               </div>
             </div>
@@ -211,9 +188,7 @@ export default {
       processingProgress: 0,
       activeTab: "original",
       segmentationInfo: {
-        regions: 0,
         time: 0,
-        accuracy: 0,
       },
     };
   },
@@ -225,12 +200,7 @@ export default {
         case "original":
           return this.uploadedImage;
         case "segmented":
-          return this.segmentationResult;
-        case "overlay":
-          return `http://127.0.0.1:5000/download/${this.segmentationResultFilename.replace(
-            ".png",
-            "_overlay.png"
-          )}`;
+          return `http://127.0.0.1:5000/download/${this.segmentationResultFilename}`;
         default:
           return this.uploadedImage;
       }
@@ -327,11 +297,9 @@ export default {
 
           if (data.message && data.output) {
             this.segmentationResultFilename = data.output;
-            this.segmentationResult = `/download/${data.output}`;
+            this.segmentationResult = true; // 仅标记有结果
             this.segmentationInfo = {
-              regions: Math.floor(Math.random() * 10) + 1,
               time: (Math.random() * 5 + 1).toFixed(2),
-              accuracy: (Math.random() * 10 + 90).toFixed(1),
             };
             this.currentStep = 3;
             this.activeTab = "segmented";
@@ -671,19 +639,22 @@ export default {
 
 .result-info {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   margin-bottom: 15px;
-  gap: 15px;
 }
 
 .info-card {
-  flex: 1;
   background: rgba(16, 32, 67, 0.5);
   border-radius: 8px;
   padding: 15px;
   display: flex;
   align-items: center;
   border: 1px solid rgba(57, 175, 253, 0.2);
+  width: 200px;
+}
+
+.time-card {
+  width: 200px;
 }
 
 .info-icon {
@@ -880,4 +851,4 @@ export default {
     width: 100%;
   }
 }
-</style> 
+</style>
