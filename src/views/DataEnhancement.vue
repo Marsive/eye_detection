@@ -33,12 +33,12 @@
             :limit="1"
             ref="upload"
           >
-            <div class="upload-placeholder" v-if="!originalImage">
+            <div class="upload-placeholder" v-if="!originalImageUrl">
               <i class="el-icon-upload"></i>
               <div class="upload-text">点击上传图像</div>
             </div>
             <div v-else class="preview-container">
-              <img :src="originalImage" class="preview-image" />
+              <img :src="originalImageUrl" class="preview-image" />
               <div class="delete-button" @click.stop="removeUploadedImage">
                 <i class="el-icon-delete"></i>
               </div>
@@ -50,27 +50,32 @@
       <!-- 右侧面板：原始图像显示 + 执行增强按钮 + 增强结果 -->
       <div class="right-panel">
         <div class="section-title">原始图像</div>
-        <div class="image-display">
-          <div v-if="!originalImage" class="empty-state">
+        <div class="image-display" ref="originalImageContainer">
+          <div v-if="!originalImageUrl" class="empty-state">
             <i class="el-icon-picture-outline"></i>
             <p>请先上传图像</p>
           </div>
-          <!-- 这里显示"originalImage"，注意：实际上是后端返回的增强图片，而非本地原图 -->
-          <img v-else :src="originalImage" class="display-image" />
+          <!-- 使用本地预览URL展示原图 -->
+          <img
+            v-else
+            :src="originalImageUrl"
+            class="display-image"
+            ref="originalImageElement"
+          />
         </div>
 
         <el-button
           type="primary"
           class="process-button"
           @click="applyAugmentation"
-          :disabled="!originalImage || selectedAugmentations.length === 0"
+          :disabled="!originalImageUrl || selectedAugmentations.length === 0"
           :loading="processing"
         >
           <i class="el-icon-refresh-right"></i> 执行数据增强
         </el-button>
 
         <div class="section-title mt-20">增强结果</div>
-        <div class="image-display">
+        <div class="image-display" :style="resultContainerStyle">
           <div
             v-if="!augmentedImages || augmentedImages.length === 0"
             class="empty-state"
@@ -84,7 +89,7 @@
               :key="index"
               class="enhanced-image-item"
             >
-              <img :src="image.url" class="display-image" />
+              <img :src="image.url" class="display-image" :style="imageStyle" />
               <div class="image-label">{{ image.label }}</div>
             </div>
           </div>
@@ -108,7 +113,7 @@ export default {
     return {
       processing: false,
       selectedAugmentations: [],
-      originalImage: "", // 用来显示服务器返回后的"图像路径"，目前相当于后端的"增强图"
+      originalImage: "", // 用来存储服务器返回的图像路径
       originalImageFile: null, // 记录本地上传的文件对象
       originalImageUrl: "", // 本地预览URL
       augmentedImages: [], // 存放所有增强后（含客户端/服务器等）的结果
@@ -119,9 +124,36 @@ export default {
       ],
       // 上传地址，注意这里指向后端的"低光增强"接口
       uploadUrl: "http://127.0.0.1:5000/predict/lowlight",
+      // 用于保持图像显示一致性的样式
+      resultContainerStyle: {
+        height: "300px",
+      },
+      imageStyle: {},
     };
   },
+  mounted() {
+    // 添加窗口大小变化监听
+    window.addEventListener("resize", this.updateImageContainerSize);
+  },
+  beforeDestroy() {
+    // 移除监听器
+    window.removeEventListener("resize", this.updateImageContainerSize);
+  },
   methods: {
+    // 更新图像容器尺寸以保持一致
+    updateImageContainerSize() {
+      // 检查原图元素是否存在
+      if (this.$refs.originalImageElement) {
+        // 取原图容器的宽高
+        const container = this.$refs.originalImageContainer;
+        if (container) {
+          this.resultContainerStyle = {
+            height: `${container.clientHeight}px`,
+          };
+        }
+      }
+    },
+
     toggleAugmentation(value) {
       const index = this.selectedAugmentations.indexOf(value);
       if (index > -1) {
@@ -146,7 +178,7 @@ export default {
 
       // 记录下文件对象，用于后续客户端旋转/翻转处理
       this.originalImageFile = file;
-      // 本地预览URL（如果想在上传前就预览"原图"，可以直接用这个）
+      // 本地预览URL
       this.originalImageUrl = URL.createObjectURL(file);
 
       return true;
@@ -155,19 +187,20 @@ export default {
     // 上传成功后回调
     handleUploadSuccess(response) {
       if (response && response.outputs && response.outputs.length > 0) {
-        // 这里 outputs[0] 是后端增强处理完成后返回的文件名
-        // 如果要访问后端文件，需要带完整URL，否则会在当前前端端口下访问不到
+        // 保存服务器返回的图像路径
         this.originalImage = `http://127.0.0.1:5000/download/${response.outputs[0]}`;
 
-        // 如果还有 uploadFiles 列表，可再次取它做本地处理
+        // 确保我们仍然有本地文件对象用于前端处理
         if (this.$refs.upload.uploadFiles.length > 0) {
           this.originalImageFile = this.$refs.upload.uploadFiles[0].raw;
-          this.originalImageUrl = URL.createObjectURL(this.originalImageFile);
         }
 
-        // 清空之前的"增强结果"列表
+        // 清空之前的增强结果列表
         this.augmentedImages = [];
         this.$message.success("图像上传成功并完成服务器增强");
+
+        // 更新图像容器尺寸
+        this.$nextTick(this.updateImageContainerSize);
       } else {
         this.$message.error(response.message || "上传失败");
       }
@@ -181,7 +214,8 @@ export default {
 
     // 点击执行数据增强按钮
     async applyAugmentation() {
-      if (!this.originalImage || this.selectedAugmentations.length === 0) return;
+      if (!this.originalImageUrl || this.selectedAugmentations.length === 0)
+        return;
       try {
         this.processing = true;
         // 每次点击处理时先清空之前的增强结果
@@ -195,6 +229,8 @@ export default {
           await this.processServerSideAugmentations();
         }
 
+        // 更新结果显示尺寸
+        this.$nextTick(this.updateImageContainerSize);
         this.$message.success("增强处理完成");
       } catch (error) {
         console.error("增强处理错误:", error);
@@ -211,6 +247,17 @@ export default {
       return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
+          // 记录原始图像尺寸用于显示
+          const originalWidth = img.width;
+          const originalHeight = img.height;
+
+          // 记录图像尺寸以保持一致的显示效果
+          this.imageStyle = {
+            width: `${originalWidth}px`,
+            height: `${originalHeight}px`,
+            objectFit: "contain",
+          };
+
           if (this.selectedAugmentations.includes("rotate")) {
             const rotatedCanvas = this.rotateImage(img);
             const rotatedDataUrl = rotatedCanvas.toDataURL("image/jpeg");
@@ -233,8 +280,8 @@ export default {
 
           resolve();
         };
-        // 这里使用"本地预览地址"作为图像源
-        img.src = this.originalImageUrl || this.originalImage;
+        // 使用本地预览地址作为图像源确保处理的是原始图像
+        img.src = this.originalImageUrl;
       });
     },
 
@@ -273,18 +320,22 @@ export default {
       return canvas;
     },
 
-    // 服务器再做一次"低光增强"
+    // 服务器端处理低光增强
     async processServerSideAugmentations() {
-      // 这里需要把"原图文件"再发给后端
+      // 这里需要把原图文件再发给后端
       if (!this.originalImageFile) return;
       const formData = new FormData();
       formData.append("file", this.originalImageFile);
 
-      // 使用和上传相同的后端URL也可以，或者你也可以单独定义
+      // 发送请求
       const response = await axios.post(this.uploadUrl, formData);
 
-      if (response.data && response.data.outputs.length > 0) {
-        // 这里返回的是新的增强后文件
+      if (
+        response.data &&
+        response.data.outputs &&
+        response.data.outputs.length > 0
+      ) {
+        // 使用服务器返回的增强后图像URL
         const serverImgUrl = `http://127.0.0.1:5000/download/${response.data.outputs[0]}`;
         this.augmentedImages.push({
           url: serverImgUrl,
@@ -300,7 +351,7 @@ export default {
     async downloadAugmentedImages() {
       for (const image of this.augmentedImages) {
         const a = document.createElement("a");
-        a.href = image.url;
+        a.href = image.downloadUrl; // 使用下载URL
         a.download = `enhanced_${image.label}.jpg`;
         document.body.appendChild(a);
         a.click();
@@ -310,7 +361,7 @@ export default {
       }
     },
 
-    // 添加删除上传图片的方法
+    // 删除上传图片
     removeUploadedImage(e) {
       // 阻止事件冒泡，避免触发上传
       if (e) {
@@ -322,12 +373,13 @@ export default {
       this.originalImageFile = null;
       this.originalImageUrl = "";
       this.augmentedImages = [];
-      
+      this.imageStyle = {};
+
       // 重置上传组件
       if (this.$refs.upload) {
         this.$refs.upload.clearFiles();
       }
-      
+
       this.$message.success("图像已删除");
     },
   },
