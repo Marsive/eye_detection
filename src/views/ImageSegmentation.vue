@@ -113,7 +113,7 @@
                 :class="{ active: activeTab === 'segmented' }"
                 @click="activeTab = 'segmented'"
               >
-                叠加显示
+              分割结果
               </div>
 
               <div
@@ -121,7 +121,7 @@
                 :class="{ active: activeTab === 'superposed' }"
                 @click="activeTab = 'superposed'"
               >
-                分割结果
+                叠加显示
               </div>
             </div>
 
@@ -191,14 +191,12 @@ export default {
       uploadedImage: null,
       uploadedFile: null,
       segmentationResult: null,
-      segmentationResultFilename: null,
-      segmentationOverlayFilename: null,
+      segmentationResultFilename: null,    // 存储分割结果文件名（mask）
+      segmentationOverlayFilename: null,   // 存储叠加结果文件名（overlay）
       isProcessing: false,
       processingProgress: 0,
       activeTab: "original",
-      segmentationInfo: {
-        time: 0,
-      },
+      segmentationInfo: { time: 0 }
     };
   },
   computed: {
@@ -208,14 +206,14 @@ export default {
       switch (this.activeTab) {
         case "original":
           return this.uploadedImage;
-        case "segmented":
-          return `http://127.0.0.1:5000/download/${this.segmentationOverlayFilename}`;
-        case "superposed":
+        case "segmented":  // 显示分割结果（mask）
           return `http://127.0.0.1:5000/download/${this.segmentationResultFilename}`;
+        case "superposed": // 显示叠加结果（overlay）
+          return `http://127.0.0.1:5000/download/${this.segmentationOverlayFilename}`;
         default:
           return this.uploadedImage;
       }
-    },
+    }
   },
   methods: {
     triggerUpload() {
@@ -290,43 +288,31 @@ export default {
 
       const interval = setInterval(() => {
         this.processingProgress += 5;
-        if (this.processingProgress >= 95) {
-          clearInterval(interval);
-        }
+        if (this.processingProgress >= 95) clearInterval(interval);
       }, 200);
 
       fetch("http://127.0.0.1:5000/predict/segmentation", {
         method: "POST",
-        body: formData,
+        body: formData
       })
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error("分割请求失败");
-          }
-          return response.json();
-        })
-        .then((data) => {
+        .then(response => response.json())
+        .then(data => {
           clearInterval(interval);
           this.processingProgress = 100;
 
-          if (data.message && data.output) {
-            this.segmentationResultFilename = data.output;
-            this.segmentationOverlayFilename = data.overlay || data.output;
-            this.segmentationResult = true;
-            this.segmentationInfo = {
-              time: (Math.random() * 5 + 1).toFixed(2),
-            };
-            this.currentStep = 3;
-            this.activeTab = "segmented";
-            this.$message.success("影像分割成功");
-          } else {
-            throw new Error(data.error || "分割失败");
-          }
+          // 更新字段名称匹配后端返回
+          this.segmentationResultFilename = data.mask_output;
+          this.segmentationOverlayFilename = data.overlay_output;
+          
+          this.segmentationResult = true;
+          this.segmentationInfo.time = (Math.random() * 5 + 1).toFixed(2);
+          this.currentStep = 3;
+          this.activeTab = "segmented";
+          this.$message.success("影像分割成功");
         })
-        .catch((error) => {
-          clearInterval(interval);
-          console.error("分割失败:", error);
-          this.$message.error(error.message || "分割处理失败，请重试");
+        .catch(error => {
+          console.error("处理失败:", error);
+          this.$message.error("分割处理失败，请重试");
         })
         .finally(() => {
           this.isProcessing = false;
@@ -348,11 +334,11 @@ export default {
           this.$message.warning("请先切换到分割结果或叠加显示标签页");
           return;
         case "segmented":
-          downloadFilename = this.segmentationOverlayFilename;
+          downloadFilename = `overlay_${Date.now()}.png`;
           downloadUrl = `http://127.0.0.1:5000/download/${this.segmentationOverlayFilename}`;
           break;
         case "superposed":
-          downloadFilename = this.segmentationResultFilename;
+          downloadFilename = `segmentation_${Date.now()}.png`;
           downloadUrl = `http://127.0.0.1:5000/download/${this.segmentationResultFilename}`;
           break;
         default:
@@ -380,6 +366,7 @@ export default {
   },
 };
 </script>
+
 
 <style scoped>
 .segmentation-container {
